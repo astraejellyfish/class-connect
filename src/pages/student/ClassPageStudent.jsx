@@ -59,13 +59,51 @@ function mapQueueRow(row) {
 function formatLocalActivityTime(value) {
   if (!value) return "";
 
-  const date = new Date(value);
+  const text = String(value);
+  const hasTimezone = /(?:z|[+-]\d{2}:?\d{2})$/i.test(text);
+  const date = new Date(hasTimezone ? text : `${text}Z`);
   if (Number.isNaN(date.getTime())) return "";
 
   return date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getSelectedNameFromLog(message) {
+  const text = String(message || "").trim();
+  const match =
+    text.match(/^(.+?)\s+was selected\.?$/i) ||
+    text.match(/^(.+?)\s+selected\. Waiting for student response\.?$/i) ||
+    text.match(/^(.+?)\s+selected\. Selection request table is unavailable.*$/i);
+
+  return match ? formatFullNameTitle(match[1]) : "";
+}
+
+function getLatestSelectionFromLogs(logRows = [], roster = []) {
+  for (const row of logRows) {
+    const selectedName = getSelectedNameFromLog(row.message);
+    if (!selectedName) continue;
+
+    const selectedKey = selectedName.toLowerCase();
+    const student = roster.find(
+      (item) => formatFullNameTitle(item.name).toLowerCase() === selectedKey
+    );
+
+    if (!student) continue;
+
+    return {
+      id: `log-${row.id || row.created_at}`,
+      class_id: row.class_id,
+      student_id: student.id,
+      points: 0,
+      status: "selected",
+      created_at: row.created_at,
+      fromLog: true,
+    };
+  }
+
+  return null;
 }
 
 function cleanSessionMessage(message) {
@@ -159,6 +197,7 @@ export default function ClassPageStudent() {
   const sessionAlertTimeoutRef = useRef(null);
   const activityListRef = useRef(null);
   const studentsRef = useRef([]);
+  const sessionEventsRef = useRef([]);
   const classLoaded = Boolean(classData);
   const sessionOngoing = Boolean(classData?.session_active);
   const {
@@ -185,6 +224,10 @@ export default function ClassPageStudent() {
   useEffect(() => {
     studentsRef.current = students;
   }, [students]);
+
+  useEffect(() => {
+    sessionEventsRef.current = sessionEvents;
+  }, [sessionEvents]);
 
   useEffect(() => {
     async function loadClass() {
@@ -308,11 +351,10 @@ export default function ClassPageStudent() {
         acc[item.student_id] = (acc[item.student_id] || 0) + (item.points || 0);
         return acc;
       }, {});
-      setStudents(
-        (memberRows || [])
-          .map((item) => mapRosterStudent(item, pointsByStudentId))
-          .sort((a, b) => getLastNameSortKey(a.name).localeCompare(getLastNameSortKey(b.name)))
-      );
+      const roster = (memberRows || [])
+        .map((item) => mapRosterStudent(item, pointsByStudentId))
+        .sort((a, b) => getLastNameSortKey(a.name).localeCompare(getLastNameSortKey(b.name)));
+      setStudents(roster);
       setVolunteerQueue((queueRows || []).map(mapQueueRow));
       setJoinRequest(requestRow || null);
 
@@ -327,7 +369,11 @@ export default function ClassPageStudent() {
       if (!selectionError) {
         setPendingSelection(selectionRow || null);
       }
-      setCurrentSelection(currentSelectionRows?.[0] || selectionRow || null);
+      setCurrentSelection(
+        currentSelectionRows?.[0] ||
+          selectionRow ||
+          getLatestSelectionFromLogs(logRows || [], roster)
+      );
       setStatus("");
     }
 
@@ -533,14 +579,17 @@ export default function ClassPageStudent() {
       acc[item.student_id] = (acc[item.student_id] || 0) + (item.points || 0);
       return acc;
     }, {});
-    setStudents(
-      (memberRows || [])
-        .map((item) => mapRosterStudent(item, pointsByStudentId))
-        .sort((a, b) => getLastNameSortKey(a.name).localeCompare(getLastNameSortKey(b.name)))
-    );
+    const roster = (memberRows || [])
+      .map((item) => mapRosterStudent(item, pointsByStudentId))
+      .sort((a, b) => getLastNameSortKey(a.name).localeCompare(getLastNameSortKey(b.name)));
+    setStudents(roster);
     setVolunteerQueue((queueRows || []).map(mapQueueRow));
     setPendingSelection(selectionRow || null);
-    setCurrentSelection(currentSelectionRows?.[0] || selectionRow || null);
+    setCurrentSelection(
+      currentSelectionRows?.[0] ||
+        selectionRow ||
+        getLatestSelectionFromLogs(sessionEventsRef.current, roster)
+    );
   }, [classId, membership?.student_id]);
 
   const refreshSessionEvents = useCallback(async () => {
@@ -556,7 +605,12 @@ export default function ClassPageStudent() {
       return;
     }
 
-    setSessionEvents(data || []);
+    const nextEvents = data || [];
+    setSessionEvents(nextEvents);
+    const fallbackSelection = getLatestSelectionFromLogs(nextEvents, studentsRef.current);
+    if (fallbackSelection) {
+      setCurrentSelection((current) => current || fallbackSelection);
+    }
   }, [classId]);
 
   const refreshClassStatus = useCallback(async () => {
@@ -749,6 +803,13 @@ export default function ClassPageStudent() {
           const cleanMessage = cleanSessionMessage(payload.new?.message);
           if (cleanMessage) {
             showSessionAlert(cleanMessage);
+          }
+          const fallbackSelection = getLatestSelectionFromLogs(
+            payload.new ? [payload.new] : [],
+            studentsRef.current
+          );
+          if (fallbackSelection) {
+            setCurrentSelection(fallbackSelection);
           }
           refreshSessionEvents();
         }
@@ -1112,6 +1173,14 @@ export default function ClassPageStudent() {
                 ? "Accepted. Waiting for teacher to award points."
                 : selectionFeedback.status === "skip_requested"
                   ? "Skip requested."
+                  : selectionFeedback.status === "awarded"
+                    ? `+${selectionFeedback.points} point${
+                        selectionFeedback.points === 1 ? "" : "s"
+                      } awarded.`
+                    : selectionFeedback.status === "skipped"
+                      ? "Selection skipped."
+                      : selectionFeedback.status === "selected"
+                        ? "Waiting for teacher confirmation."
                   : `${selectionFeedback.points} point${
                       selectionFeedback.points === 1 ? "" : "s"
                     } offered.`}
