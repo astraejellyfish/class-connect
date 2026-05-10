@@ -431,6 +431,177 @@ body {
   background: var(--soft);
 }
 
+.mobile-app-header {
+  display: none;
+}
+
+.mobile-app-brand img,
+.mobile-app-icon-btn img,
+.mobile-app-profile-btn img {
+  display: block;
+  object-fit: cover;
+}
+
+@media (max-width: 900px) {
+  .teacher-dashboard::before,
+  .student-myclasses-dashboard::before,
+  .student-dashboard--settings::before {
+    display: none;
+  }
+
+  .mobile-app-header {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 80;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 2px solid rgba(31, 42, 31, 0.12);
+    background: var(--panel);
+    box-shadow: 0 4px 0 rgba(31, 42, 31, 0.08);
+  }
+
+  .mobile-app-brand {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+
+  .mobile-app-brand img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+  }
+
+  .mobile-app-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .mobile-app-notification-wrap {
+    position: relative;
+    display: grid;
+    place-items: center;
+  }
+
+  .mobile-app-icon-btn,
+  .mobile-app-profile-btn {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 2px solid var(--dark);
+    box-shadow: 4px 4px 0 var(--shadow);
+    cursor: pointer;
+  }
+
+  .mobile-app-icon-btn {
+    position: relative;
+    padding: 9px;
+    border-radius: 12px;
+    background: var(--green);
+  }
+
+  .mobile-app-icon-btn img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+  }
+
+  .mobile-app-icon-btn strong {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--dark);
+    border-radius: 999px;
+    background: white;
+    color: var(--green);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .mobile-app-profile-btn {
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--green);
+    color: white;
+    font-family: "Roboto Mono", monospace;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .mobile-app-profile-btn img {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mobile-app-notification-wrap .notification-panel,
+  .mobile-app-notification-wrap .student-notification-panel {
+    position: fixed;
+    top: 66px;
+    right: 14px;
+    width: min(360px, calc(100vw - 28px));
+    z-index: 85;
+  }
+}
+
+@media (max-width: 430px) {
+  .mobile-app-header {
+    height: 56px;
+    padding: 8px 10px;
+  }
+
+  .mobile-app-brand,
+  .mobile-app-icon-btn,
+  .mobile-app-profile-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .mobile-app-brand img {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mobile-app-actions {
+    gap: 8px;
+  }
+
+  .mobile-app-icon-btn {
+    padding: 8px;
+  }
+
+  .mobile-app-icon-btn img {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mobile-app-profile-btn {
+    font-size: 16px;
+  }
+
+  .mobile-app-notification-wrap .notification-panel,
+  .mobile-app-notification-wrap .student-notification-panel {
+    top: 58px;
+    right: 10px;
+    width: calc(100vw - 20px);
+  }
+}
+
 @media (max-width: 560px) {
   .profile-photo-upload {
     align-items: stretch;
@@ -569,6 +740,55 @@ body {
   color: white;
   border: 2px solid var(--dark);
   padding: 8px 14px;
+}
+
+@media (max-width: 640px) {
+  .landing-nav {
+    width: min(100% - 22px, 420px);
+    margin-top: 12px;
+    padding: 12px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .nav-brand {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .nav-brand img {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+  }
+
+  .nav-brand span {
+    font-size: 18px;
+    line-height: 1.1;
+  }
+
+  .nav-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .nav-actions button {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 2px solid var(--dark);
+    background: white;
+    box-shadow: 3px 3px 0 var(--shadow);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .nav-actions .nav-primary {
+    padding: 8px 10px;
+  }
 }
 
 /* ===================== */

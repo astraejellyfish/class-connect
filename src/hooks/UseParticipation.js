@@ -20,7 +20,6 @@ export function useTeacherParticipationActions({
   sessionSelectedStudentIds,
   volunteerQueue,
   savingVolunteer,
-  pickResponseSeconds,
   addLog,
   setResolvingPick,
   setStudents,
@@ -36,7 +35,6 @@ export function useTeacherParticipationActions({
   playAcceptSound,
   playSkipSound,
   playResultSound,
-  playCountdownSound,
 }) {
   const resolvePick = useCallback(
     async (confirmed, resolutionStatus = confirmed ? "awarded" : "skipped") => {
@@ -113,9 +111,7 @@ export function useTeacherParticipationActions({
     const maxWheelSegments = 40;
     const wheelStudents = students.slice(0, maxWheelSegments);
     const presentStudents = wheelStudents.filter(
-      (s) =>
-        s.present &&
-        (teacherSettings.repeatSelection || !sessionSelectedStudentIds.has(s.id))
+      (s) => s.present && !sessionSelectedStudentIds.has(s.id)
     );
     if (presentStudents.length === 0 || spinning || pendingPick) return;
 
@@ -165,12 +161,10 @@ export function useTeacherParticipationActions({
       setSelectedStudent(chosen);
       setSessionSelectedStudentIds((prev) => new Set(prev).add(chosen.id));
       setSpinning(false);
-      const expiresAt = new Date(Date.now() + pickResponseSeconds * 1000).toISOString();
       const { data, error } = await createSelectionRequest({
         classId,
         studentId: chosen.id,
         points: pts,
-        expiresAt,
       });
 
       if (error) {
@@ -180,7 +174,6 @@ export function useTeacherParticipationActions({
           student: chosen,
           pts,
           responseStatus: "teacher_confirmation",
-          expiresAt,
         });
         addLog(
           `${formatStudentShort(chosen.name)} selected. Selection request table is unavailable, use teacher confirmation.`
@@ -197,19 +190,14 @@ export function useTeacherParticipationActions({
         responseStatus: data.status,
         expiresAt: data.expires_at,
       });
-      addLog(
-        `${formatStudentShort(chosen.name)} selected. Waiting ${pickResponseSeconds}s for student response.`
-      );
+      addLog(`${formatStudentShort(chosen.name)} selected. Waiting for student response.`);
       playResultSound();
-      playCountdownSound();
     }, 1200);
   }, [
     addLog,
     awardPointsInput,
     classId,
     pendingPick,
-    pickResponseSeconds,
-    playCountdownSound,
     playResultSound,
     sessionSelectedStudentIds,
     setPendingPick,
@@ -221,7 +209,6 @@ export function useTeacherParticipationActions({
     setSpinning,
     spinning,
     students,
-    teacherSettings.repeatSelection,
   ]);
 
   const acceptVolunteer = useCallback(async () => {

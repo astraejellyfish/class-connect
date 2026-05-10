@@ -4,7 +4,6 @@ export const TEACHER_SETTINGS_KEY = "class-connect-teacher-settings";
 
 const defaultTeacherSettings = {
   allowVolunteers: true,
-  repeatSelection: false,
 };
 
 export function getTeacherSettings() {

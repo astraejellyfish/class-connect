@@ -1625,6 +1625,13 @@
   }
 }
 
+@media (max-width: 900px) {
+  .teacher-dashboard::before {
+    display: none;
+    content: none;
+  }
+}
+
 @media (max-width: 480px) {
   .teacher-dashboard .hero-card {
     display: grid;

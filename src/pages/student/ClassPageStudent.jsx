@@ -10,13 +10,12 @@ import { useAudioControls } from "../../hooks/useAudioControls";
 import { formatStudentShort } from "../../utils/studentDisplay";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import BottomNav, { studentBottomNavItems } from "../../components/shared/BottomNav";
+import MobileHeader from "../../components/shared/MobileHeader";
 import "../../styles/teacher/classpage.css";
 import "../../styles/student/myclasses.css";
 import "../../styles/student/classpageS.css";
 
 const MAX_JOIN_REQUEST_ATTEMPTS = 3;
-const MAX_VOLUNTEER_ATTEMPTS = 1;
-const PICK_RESPONSE_SECONDS = 10;
 
 function getLastNameSortKey(name) {
   const parts = String(name || "")
@@ -59,7 +58,11 @@ export default function ClassPageStudent() {
   const { classId } = useParams();
   const [classData, setClassData] = useState(null);
   const [membership, setMembership] = useState(null);
+  const [studentName, setStudentName] = useState("Student");
+  const [studentAvatar, setStudentAvatar] = useState("");
   const [activity, setActivity] = useState([]);
+  const [sessionEvents, setSessionEvents] = useState([]);
+  const [sessionAlert, setSessionAlert] = useState("");
   const [students, setStudents] = useState([]);
   const [volunteerQueue, setVolunteerQueue] = useState([]);
   const [joinedSession, setJoinedSession] = useState(false);
@@ -73,23 +76,36 @@ export default function ClassPageStudent() {
   const [status, setStatus] = useState("Loading class...");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSelection, setPendingSelection] = useState(null);
-  const [selectionCountdown, setSelectionCountdown] = useState(0);
+  const [currentSelection, setCurrentSelection] = useState(null);
   const [selectionMessage, setSelectionMessage] = useState("");
   const [respondingSelection, setRespondingSelection] = useState(false);
   const [studentListOpen, setStudentListOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const previousPendingSelectionIdRef = useRef(null);
+  const sessionAlertTimeoutRef = useRef(null);
+  const activityListRef = useRef(null);
   const sessionOngoing = Boolean(classData?.session_active);
   const {
     playNotificationSound,
     playResultSound,
     playAcceptSound,
     playSkipSound,
-    playCountdownSound,
   } = useAudioControls({
     sessionActive: sessionOngoing,
-    countdownSeconds: PICK_RESPONSE_SECONDS,
   });
+
+  const showSessionAlert = useCallback((message) => {
+    window.clearTimeout(sessionAlertTimeoutRef.current);
+    setSessionAlert(message);
+    sessionAlertTimeoutRef.current = window.setTimeout(() => {
+      setSessionAlert("");
+    }, 4500);
+  }, []);
+
+  useEffect(() => {
+    return () => window.clearTimeout(sessionAlertTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     async function loadClass() {
@@ -99,6 +115,13 @@ export default function ClassPageStudent() {
         return;
       }
       const studentUserId = account.user.id;
+      setStudentName(
+        account.studentProfile?.name ||
+          account.user.user_metadata?.name ||
+          account.user.user_metadata?.full_name ||
+          "Student"
+      );
+      setStudentAvatar(account.studentProfile?.avatar_url || "");
 
       // Make sure the student really joined this class.
       const [
@@ -107,6 +130,8 @@ export default function ClassPageStudent() {
         { data: requestRow },
         { data: memberRows },
         { data: queueRows },
+        { data: logRows },
+        { data: currentSelectionRows },
       ] = await Promise.all([
         supabase
           .from("class_members")
@@ -138,6 +163,19 @@ export default function ClassPageStudent() {
           .eq("class_id", classId)
           .eq("status", "waiting")
           .order("created_at", { ascending: true }),
+        supabase
+          .from("class_session_logs")
+          .select("id, message, created_at")
+          .eq("class_id", classId)
+          .order("created_at", { ascending: false })
+          .limit(40),
+        supabase
+          .from("participation_selection_requests")
+          .select("id, class_id, student_id, points, status, created_at, expires_at")
+          .eq("class_id", classId)
+          .in("status", ["pending", "accepted", "skip_requested"])
+          .order("created_at", { ascending: false })
+          .limit(1),
       ]);
 
       if (error || !data) {
@@ -166,28 +204,18 @@ export default function ClassPageStudent() {
         .select("id", { count: "exact", head: true })
         .eq("class_id", classId)
         .eq("student_id", studentUserId);
-      let volunteerAttemptsQuery = supabase
-        .from("volunteer_queue")
-        .select("id", { count: "exact", head: true })
-        .eq("class_id", classId)
-        .eq("student_id", studentUserId);
-
       if (sessionStartedAt) {
         requestAttemptsQuery = requestAttemptsQuery.gte("created_at", sessionStartedAt);
-        volunteerAttemptsQuery = volunteerAttemptsQuery.gte("created_at", sessionStartedAt);
       }
 
       const [
         { count: requestAttemptCount, error: requestAttemptError },
-        { count: volunteerAttemptCount, error: volunteerAttemptError },
-      ] = await Promise.all([requestAttemptsQuery, volunteerAttemptsQuery]);
+      ] = await Promise.all([requestAttemptsQuery]);
 
       if (!requestAttemptError) {
         setJoinRequestAttempts(requestAttemptCount || 0);
       }
-      if (!volunteerAttemptError) {
-        setVolunteerAttempts(volunteerAttemptCount || 0);
-      }
+      setVolunteerAttempts(0);
 
       setClassData(classRow);
       setMembership({
@@ -196,6 +224,7 @@ export default function ClassPageStudent() {
       });
       setJoinedSession(Boolean(data.entry_confirmed));
       setActivity(activityRows || []);
+      setSessionEvents(logRows || []);
       const pointsByStudentId = (activityRows || []).reduce((acc, item) => {
         acc[item.student_id] = (acc[item.student_id] || 0) + (item.points || 0);
         return acc;
@@ -219,6 +248,7 @@ export default function ClassPageStudent() {
       if (!selectionError) {
         setPendingSelection(selectionRow || null);
       }
+      setCurrentSelection(currentSelectionRows?.[0] || selectionRow || null);
       setStatus("");
     }
 
@@ -235,9 +265,9 @@ export default function ClassPageStudent() {
   );
   const joinRequestLimitReached = joinRequestAttempts >= MAX_JOIN_REQUEST_ATTEMPTS;
   const volunteerLimitReached =
-    alreadyVolunteered || volunteerAttempts >= MAX_VOLUNTEER_ATTEMPTS;
-  const selectedStudent = pendingSelection
-    ? students.find((student) => student.id === pendingSelection.student_id) || null
+    alreadyVolunteered;
+  const selectedStudent = currentSelection
+    ? students.find((student) => student.id === currentSelection.student_id) || null
     : null;
   const presentCount = students.filter((student) => student.present).length;
 
@@ -249,6 +279,36 @@ export default function ClassPageStudent() {
     [students]
   );
 
+  const activityFeed = useMemo(() => {
+    const pointItems = activity.map((row) => {
+      const student = Array.isArray(row.students) ? row.students[0] : row.students;
+
+      return {
+        id: `points-${row.id}`,
+        createdAt: row.created_at,
+        message: `${formatStudentShort(student?.name || "Student")} earned ${
+          row.points
+        } pt${row.points === 1 ? "" : "s"}`,
+      };
+    });
+
+    const sessionItems = sessionEvents.map((row) => ({
+      id: `session-${row.id}`,
+      createdAt: row.created_at,
+      message: row.message,
+    }));
+
+    return [...pointItems, ...sessionItems].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [activity, sessionEvents]);
+
+  useEffect(() => {
+    if (activityListRef.current) {
+      activityListRef.current.scrollTop = 0;
+    }
+  }, [activityFeed.length]);
+
   useEffect(() => {
     if (!pendingSelection?.id) {
       previousPendingSelectionIdRef.current = null;
@@ -258,9 +318,8 @@ export default function ClassPageStudent() {
     if (previousPendingSelectionIdRef.current !== pendingSelection.id) {
       previousPendingSelectionIdRef.current = pendingSelection.id;
       playResultSound();
-      playCountdownSound();
     }
-  }, [pendingSelection?.id, playResultSound, playCountdownSound]);
+  }, [pendingSelection?.id, playResultSound]);
 
   const handleJoinSession = async () => {
     if (!canJoinSession) {
@@ -302,6 +361,7 @@ export default function ClassPageStudent() {
       { data: memberRows },
       { data: queueRows },
       { data: selectionRow },
+      { data: currentSelectionRows },
     ] =
       await Promise.all([
         supabase
@@ -328,6 +388,13 @@ export default function ClassPageStudent() {
               .eq("status", "pending")
               .maybeSingle()
           : { data: null },
+        supabase
+          .from("participation_selection_requests")
+          .select("id, class_id, student_id, points, status, created_at, expires_at")
+          .eq("class_id", classId)
+          .in("status", ["pending", "accepted", "skip_requested"])
+          .order("created_at", { ascending: false })
+          .limit(1),
       ]);
 
     setActivity(activityRows || []);
@@ -342,13 +409,58 @@ export default function ClassPageStudent() {
     );
     setVolunteerQueue((queueRows || []).map(mapQueueRow));
     setPendingSelection(selectionRow || null);
+    setCurrentSelection(currentSelectionRows?.[0] || selectionRow || null);
   }, [classId, membership?.student_id]);
+
+  const refreshSessionEvents = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("class_session_logs")
+      .select("id, message, created_at")
+      .eq("class_id", classId)
+      .order("created_at", { ascending: false })
+      .limit(40);
+
+    if (error) {
+      console.warn("Could not refresh session events:", error);
+      return;
+    }
+
+    setSessionEvents(data || []);
+  }, [classId]);
 
   useEffect(() => {
     if (!classData || status) return undefined;
 
     const participationChannel = supabase
       .channel(`student-participation-${classId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "class_members",
+          filter: `class_id=eq.${classId}`,
+        },
+        (payload) => {
+          if (payload.new?.student_id === membership?.student_id) {
+            setJoinedSession(Boolean(payload.new?.entry_confirmed));
+            setMembership((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    entry_confirmed: Boolean(payload.new?.entry_confirmed),
+                  }
+                : prev
+            );
+            if (payload.new?.entry_confirmed) {
+              setJoinRequest(null);
+              showSessionAlert("Your session entry was confirmed.");
+              playNotificationSound();
+            }
+          }
+          refreshParticipationState();
+        }
+      )
       .on(
         "postgres_changes",
         {
@@ -408,6 +520,21 @@ export default function ClassPageStudent() {
           refreshParticipationState();
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "class_session_logs",
+          filter: `class_id=eq.${classId}`,
+        },
+        (payload) => {
+          if (payload.new?.message) {
+            showSessionAlert(payload.new.message);
+          }
+          refreshSessionEvents();
+        }
+      )
       .subscribe();
 
     const intervalId = window.setInterval(refreshParticipationState, 3000);
@@ -425,6 +552,8 @@ export default function ClassPageStudent() {
     playResultSound,
     playSkipSound,
     refreshParticipationState,
+    refreshSessionEvents,
+    showSessionAlert,
     status,
   ]);
 
@@ -458,8 +587,14 @@ export default function ClassPageStudent() {
           if (!payload.new?.session_active) {
             setJoinedSession(false);
             setPendingSelection(null);
+            setCurrentSelection(null);
           }
+          showSessionAlert(
+            payload.new?.session_active ? "Session started." : "Session ended."
+          );
+          playNotificationSound();
           refreshParticipationState();
+          refreshSessionEvents();
         }
       )
       .subscribe();
@@ -467,7 +602,15 @@ export default function ClassPageStudent() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [classData, classId, refreshParticipationState, status]);
+  }, [
+    classData,
+    classId,
+    playNotificationSound,
+    refreshParticipationState,
+    refreshSessionEvents,
+    showSessionAlert,
+    status,
+  ]);
 
   const handleVolunteer = async () => {
     if (!membership || !sessionOngoing || !canJoinSession || volunteerLimitReached) {
@@ -533,42 +676,6 @@ export default function ClassPageStudent() {
     playNotificationSound();
   };
 
-  useEffect(() => {
-    if (!pendingSelection?.expires_at) {
-      setSelectionCountdown(0);
-      return undefined;
-    }
-
-    const updateCountdown = () => {
-      const expiresAt = new Date(pendingSelection.expires_at).getTime();
-      if (!Number.isFinite(expiresAt)) {
-        setSelectionCountdown(0);
-        return;
-      }
-
-      setSelectionCountdown(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
-    };
-
-    updateCountdown();
-    const intervalId = window.setInterval(updateCountdown, 500);
-    return () => window.clearInterval(intervalId);
-  }, [pendingSelection?.expires_at]);
-
-  useEffect(() => {
-    if (!pendingSelection?.expires_at || respondingSelection) return;
-
-    const expiresAt = new Date(pendingSelection.expires_at).getTime();
-    if (!Number.isFinite(expiresAt) || Date.now() < expiresAt) return;
-
-    async function expireSelection() {
-      await updateSelectionResponse(pendingSelection.id, "skip_requested");
-      setSelectionMessage("Time expired. A skip request was sent.");
-      setPendingSelection(null);
-    }
-
-    expireSelection();
-  }, [pendingSelection, selectionCountdown, respondingSelection]);
-
   const handleSelectionResponse = async (nextStatus) => {
     if (!pendingSelection || respondingSelection) return;
 
@@ -602,14 +709,25 @@ export default function ClassPageStudent() {
 
   return (
     <div className="student-dashboard student-class-dashboard">
-      <button
-        type="button"
-        className="student-class-mobile-menu"
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open menu"
-      >
-        <img src="/icons/menu.png" alt="" />
-      </button>
+      <MobileHeader
+        notificationOpen={notificationsOpen}
+        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        onProfileClick={() => navigate("/student/settings")}
+        profileContent={
+          studentAvatar ? (
+            <img src={studentAvatar} alt="Profile" />
+          ) : (
+            studentName.charAt(0).toUpperCase()
+          )
+        }
+        notificationPanel={
+          <div className="student-notification-panel">
+            <p className="student-notification-empty">
+              Session alerts appear on this class page as they happen.
+            </p>
+          </div>
+        }
+      />
 
       {sidebarOpen && (
         <div
@@ -714,6 +832,12 @@ export default function ClassPageStudent() {
           )}
         </header>
 
+        {sessionAlert && (
+          <div className="class-session-alert student-class-session-alert" role="status">
+            {sessionAlert}
+          </div>
+        )}
+
         {status ? (
           <section className="student-session-card student-class-status-card">
             <h2>{status}</h2>
@@ -727,9 +851,8 @@ export default function ClassPageStudent() {
                   students={students}
                   selectedStudent={selectedStudent}
                   sessionOngoing={sessionOngoing}
+                  currentSelection={currentSelection}
                   pendingSelection={pendingSelection}
-                  selectionCountdown={selectionCountdown}
-                  pickResponseSeconds={PICK_RESPONSE_SECONDS}
                   respondingSelection={respondingSelection}
                   selectionMessage={selectionMessage}
                   canJoinSession={canJoinSession}
@@ -737,7 +860,6 @@ export default function ClassPageStudent() {
                   volunteerLimitReached={volunteerLimitReached}
                   alreadyVolunteered={alreadyVolunteered}
                   volunteerAttempts={volunteerAttempts}
-                  maxVolunteerAttempts={MAX_VOLUNTEER_ATTEMPTS}
                   sessionMessage={sessionMessage}
                   onSelectionResponse={handleSelectionResponse}
                   onVolunteer={handleVolunteer}
@@ -757,33 +879,24 @@ export default function ClassPageStudent() {
 
                   <div className="student-activity-head">
                     <h2>Activity Log</h2>
-                    <span>{activity.length}</span>
+                    <span>{activityFeed.length}</span>
                   </div>
 
-                  <div className="student-activity-list">
-                    {activity.length === 0 ? (
+                  <div className="student-activity-list" ref={activityListRef}>
+                    {activityFeed.length === 0 ? (
                       <p>No activity yet.</p>
                     ) : (
-                      activity.map((row) => {
-                        const student = Array.isArray(row.students)
-                          ? row.students[0]
-                          : row.students;
-
-                        return (
-                          <article key={row.id}>
-                            <strong>
-                              {formatStudentShort(student?.name || "Student")} earned{" "}
-                              {row.points} pt{row.points === 1 ? "" : "s"}
-                            </strong>
-                            <span>
-                              {new Date(row.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          </article>
-                        );
-                      })
+                      activityFeed.map((row) => (
+                        <article key={row.id}>
+                          <strong>{row.message}</strong>
+                          <span>
+                            {new Date(row.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </article>
+                      ))
                     )}
                   </div>
                 </section>

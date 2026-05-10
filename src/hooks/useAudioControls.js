@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAudioSettings } from "../lib/audioPreferences";
 
+const SESSION_MUSIC_WANTED_KEY = "class-connect-session-music-wanted";
+
 export function useAudioControls({ sessionActive = false, countdownSeconds = 10 } = {}) {
   const [audioSettings, setAudioSettings] = useState(getAudioSettings);
   const [skipFxActive, setSkipFxActive] = useState(false);
@@ -11,6 +13,7 @@ export function useAudioControls({ sessionActive = false, countdownSeconds = 10 
   const skipAudioRef = useRef(null);
   const countdownAudioRef = useRef(null);
   const countdownStopTimeoutRef = useRef(null);
+  const unlockedRef = useRef(false);
 
   useEffect(() => {
     bgmRef.current = new Audio("/bgm.wav");
@@ -68,16 +71,38 @@ export function useAudioControls({ sessionActive = false, countdownSeconds = 10 
   }, []);
 
   useEffect(() => {
+    const unlockAudio = () => {
+      unlockedRef.current = true;
+      const bgm = bgmRef.current;
+      if (sessionActive && audioSettings.sessionMusic && bgm) {
+        bgm.play().catch(() => {});
+      }
+    };
+
+    window.addEventListener("pointerdown", unlockAudio, { passive: true });
+    window.addEventListener("keydown", unlockAudio);
+    window.addEventListener("touchstart", unlockAudio, { passive: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+    };
+  }, [audioSettings.sessionMusic, sessionActive]);
+
+  useEffect(() => {
     const bgm = bgmRef.current;
     if (!bgm) return;
 
     if (sessionActive && audioSettings.sessionMusic) {
+      localStorage.setItem(SESSION_MUSIC_WANTED_KEY, "true");
       bgm.play().catch(() => {
         // Browsers may block audio until the first user gesture.
       });
       return;
     }
 
+    localStorage.setItem(SESSION_MUSIC_WANTED_KEY, "false");
     bgm.pause();
   }, [audioSettings.sessionMusic, sessionActive]);
 

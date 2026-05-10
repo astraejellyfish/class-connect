@@ -5,17 +5,14 @@ function StudentParticipationPanel({
   students = [],
   selectedStudent = null,
   sessionOngoing = false,
+  currentSelection = null,
   pendingSelection = null,
-  selectionCountdown = 0,
-  pickResponseSeconds = 10,
   respondingSelection = false,
   selectionMessage = "",
   canJoinSession = false,
   volunteering = false,
   volunteerLimitReached = false,
   alreadyVolunteered = false,
-  volunteerAttempts = 0,
-  maxVolunteerAttempts = 1,
   sessionMessage = "",
   onSelectionResponse,
   onVolunteer,
@@ -48,10 +45,10 @@ function StudentParticipationPanel({
             selectedStudent={selectedStudent}
             spinning={false}
             pendingPick={
-              pendingSelection
+              currentSelection
                 ? {
                     student: selectedStudent,
-                    pts: pendingSelection.points,
+                    pts: currentSelection.points,
                   }
                 : null
             }
@@ -67,27 +64,16 @@ function StudentParticipationPanel({
           <h3>{formatFullNameTitle(selectedStudent.name)}</h3>
           <p>
             Accept to participate for <strong>{pendingSelection.points}</strong>{" "}
-            pt{pendingSelection.points === 1 ? "" : "s"}, or request to skip.
+            pt{pendingSelection.points === 1 ? "" : "s"}, or request to skip when
+            needed.
           </p>
-          <strong className="student-selection-timer">{selectionCountdown}s</strong>
-          <div
-            className="student-countdown-visual"
-            style={{
-              "--countdown-progress": `${
-                Math.max(0, Math.min(1, selectionCountdown / pickResponseSeconds)) *
-                100
-              }%`,
-            }}
-            aria-hidden="true"
-          >
-            <span />
-          </div>
+          <strong className="student-selection-timer">Teacher controlled</strong>
           <div className="student-selection-actions">
             <button
               type="button"
               className="student-primary-btn"
               onClick={() => onSelectionResponse("accepted")}
-              disabled={respondingSelection || selectionCountdown <= 0}
+              disabled={respondingSelection}
             >
               {respondingSelection ? "Sending..." : "Accept"}
             </button>
@@ -95,7 +81,7 @@ function StudentParticipationPanel({
               type="button"
               className="student-selection-skip-btn"
               onClick={() => onSelectionResponse("skip_requested")}
-              disabled={respondingSelection || selectionCountdown <= 0}
+              disabled={respondingSelection}
             >
               Request Skip
             </button>
@@ -117,9 +103,7 @@ function StudentParticipationPanel({
           >
             {alreadyVolunteered
               ? "Already in Queue"
-              : volunteerAttempts >= maxVolunteerAttempts
-                ? "Volunteer Used"
-                : volunteering
+              : volunteering
                   ? "Joining..."
                   : "Volunteer"}
           </button>

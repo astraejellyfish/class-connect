@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import AppLoadingScreen from "../../components/shared/AppLoadingScreen";
 import BottomNav, { teacherBottomNavItems } from "../../components/shared/BottomNav";
+import MobileHeader from "../../components/shared/MobileHeader";
 import TeacherSidebar from "../../components/shared/TeacherSidebar";
 import "../../styles/teacher/dashboard.css";
 
@@ -129,31 +130,17 @@ export default function MyClassesTeacher() {
 
   return (
     <div className="teacher-dashboard teacher-dashboard--two-col">
-      <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
-        <img src="/icons/menu.png" alt="Menu" />
-      </button>
-      <div className="mobile-notification-wrap">
-        <button
-          type="button"
-          className="mobile-notification-btn"
-          onClick={() => setNotificationsOpen((open) => !open)}
-          aria-label="Open notifications"
-        >
-          <img src="/icons/notification.png" alt="" />
-        </button>
-        {notificationsOpen && (
-          <div className="notification-panel mobile-notification-panel">
+      <MobileHeader
+        notificationOpen={notificationsOpen}
+        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        onProfileClick={() => navigate("/settings/account")}
+        profileContent={teacherName.charAt(0).toUpperCase()}
+        notificationPanel={
+          <div className="notification-panel">
             <p className="notification-empty">No notifications yet.</p>
           </div>
-        )}
-      </div>
-      <button
-        className="mobile-profile-btn"
-        onClick={() => navigate("/settings/account")}
-        aria-label="Open profile"
-      >
-        {teacherName.charAt(0).toUpperCase()}
-      </button>
+        }
+      />
 
       {sidebarOpen && (
         <div

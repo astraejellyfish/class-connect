@@ -43,6 +43,10 @@
   text-align: right;
 }
 
+.student-class-session-alert {
+  margin-top: -6px;
+}
+
 .student-class-title-row {
   display: flex;
   align-items: center;

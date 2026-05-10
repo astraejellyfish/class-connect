@@ -9,15 +9,20 @@ export function recordParticipationPoints({ classId, studentId, points }) {
 }
 
 export function createSelectionRequest({ classId, studentId, points, expiresAt }) {
+  const payload = {
+    class_id: classId,
+    student_id: studentId,
+    points,
+    status: "pending",
+  };
+
+  if (expiresAt) {
+    payload.expires_at = expiresAt;
+  }
+
   return supabase
     .from("participation_selection_requests")
-    .insert({
-      class_id: classId,
-      student_id: studentId,
-      points,
-      status: "pending",
-      expires_at: expiresAt,
-    })
+    .insert(payload)
     .select("id, status, expires_at")
     .single();
 }

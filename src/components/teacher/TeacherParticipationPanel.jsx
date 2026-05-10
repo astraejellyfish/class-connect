@@ -70,8 +70,8 @@ function TeacherParticipationPanel({
 
         <p className="participation-sub">
           Weighted fairness: fewer total points means a higher chance to be picked.
-          Set <strong>Pts / pick</strong>, then spin. The selected student must
-          accept or request to skip before the timer ends.
+          Set <strong>Pts / pick</strong>, then spin. The teacher manually awards
+          points or skips when the answer is finished.
         </p>
 
         <div className="placeholder-box spinner-box">
@@ -98,7 +98,7 @@ function TeacherParticipationPanel({
             <p className="pick-confirm-label">
               {selectionRequestUnavailable
                 ? "Confirm selection"
-                : "Waiting for student response"}
+                : "Selection in progress"}
             </p>
             <p className="pick-confirm-hint">
               <strong>{formatFullNameTitle(pendingPick.student.name)}</strong>{" "}
@@ -114,26 +114,24 @@ function TeacherParticipationPanel({
                       : "Pending"}
               </strong>
             </p>
-            {selectionRequestUnavailable && (
-              <div className="pick-confirm-buttons">
-                <button
-                  type="button"
-                  className="pick-got-btn"
-                  onClick={() => onResolvePick(true)}
-                  disabled={resolvingPick}
-                >
-                  {resolvingPick ? "Saving..." : "Award points"}
-                </button>
-                <button
-                  type="button"
-                  className={`pick-skip-btn ${skipFxActive ? "is-skip-fx" : ""}`}
-                  onClick={() => onResolvePick(false)}
-                  disabled={resolvingPick}
-                >
-                  Skip
-                </button>
-              </div>
-            )}
+            <div className="pick-confirm-buttons">
+              <button
+                type="button"
+                className="pick-got-btn"
+                onClick={() => onResolvePick(true)}
+                disabled={resolvingPick}
+              >
+                {resolvingPick ? "Saving..." : "Award points"}
+              </button>
+              <button
+                type="button"
+                className={`pick-skip-btn ${skipFxActive ? "is-skip-fx" : ""}`}
+                onClick={() => onResolvePick(false)}
+                disabled={resolvingPick}
+              >
+                Skip
+              </button>
+            </div>
           </div>
         )}
 

@@ -11,6 +11,7 @@ import ConfirmModal from "../../components/common/ConfirmModal";
 import JoinClassModal from "../../components/student/JoinClassModal";
 import AppLoadingScreen from "../../components/shared/AppLoadingScreen";
 import BottomNav, { studentBottomNavItems } from "../../components/shared/BottomNav";
+import MobileHeader from "../../components/shared/MobileHeader";
 import "../../styles/student/myclasses.css";
 
 function mapMembership(row) {
@@ -184,26 +185,62 @@ export default function MyClasses() {
 
   return (
     <div className="student-dashboard student-myclasses-dashboard">
-      <button
-        type="button"
-        className="student-myclasses-mobile-menu"
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open menu"
-      >
-        <img src="/icons/menu.png" alt="" />
-      </button>
-      <button
-        type="button"
-        className="student-mobile-profile-btn"
-        onClick={() => navigate("/student/settings")}
-        aria-label="Open account settings"
-      >
-        {studentAvatar ? (
-          <img src={studentAvatar} alt="Profile" />
-        ) : (
-          studentName.charAt(0).toUpperCase()
-        )}
-      </button>
+      <MobileHeader
+        notificationOpen={notificationsOpen}
+        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        notificationCount={unreadNotifications}
+        onProfileClick={() => navigate("/student/settings")}
+        profileContent={
+          studentAvatar ? (
+            <img src={studentAvatar} alt="Profile" />
+          ) : (
+            studentName.charAt(0).toUpperCase()
+          )
+        }
+        notificationPanel={
+          <div className="student-notification-panel">
+            <div className="student-notification-panel-head">
+              <h3>Notifications</h3>
+              <button
+                type="button"
+                onClick={() => setNotificationsRead(true)}
+                disabled={notificationsRead || notifications.length === 0}
+              >
+                Mark all read
+              </button>
+            </div>
+
+            {notifications.length === 0 ? (
+              <p className="student-notification-empty">No notifications yet.</p>
+            ) : (
+              <div className="student-notification-list">
+                {notifications.map((notification) => (
+                  <article
+                    key={notification.id}
+                    className={`student-notification-item ${
+                      notificationsRead ? "" : "is-unread"
+                    }`}
+                  >
+                    <span>
+                      <strong>{notification.title}</strong>
+                      <small>{notification.type}</small>
+                    </span>
+                    <p>{notification.message}</p>
+                    <time>
+                      {notification.createdAt.toLocaleString([], {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        }
+      />
 
       {sidebarOpen && (
         <div

@@ -10,6 +10,7 @@ import {
 import ConfirmModal from "../../components/common/ConfirmModal";
 import ProfilePhotoUpload from "../../components/common/ProfilePhotoUpload";
 import BottomNav, { studentBottomNavItems } from "../../components/shared/BottomNav";
+import MobileHeader from "../../components/shared/MobileHeader";
 import {
   cropProfilePhotoToSquare,
   getProfilePhotoError,
@@ -245,37 +246,19 @@ export default function SettingsPage() {
 
   return (
     <div className="student-dashboard student-dashboard--settings">
-      <button
-        type="button"
-        className="student-settings-mobile-menu"
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open menu"
-      >
-        <img src="/icons/menu.png" alt="" />
-      </button>
-      <div className="student-settings-notification-wrap">
-        <button
-          type="button"
-          className="student-settings-notification-btn"
-          onClick={() => setNotificationsOpen((open) => !open)}
-          aria-label="Open notifications"
-        >
-          <img src="/icons/notification.png" alt="" />
-        </button>
-        {notificationsOpen && (
-          <div className="student-notification-panel student-settings-notification-panel">
+      <MobileHeader
+        notificationOpen={notificationsOpen}
+        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        onProfileClick={() => setOpenSection("account")}
+        profileContent={
+          avatarUrl ? <img src={avatarUrl} alt="Profile" /> : studentName.charAt(0).toUpperCase()
+        }
+        notificationPanel={
+          <div className="student-notification-panel">
             <p className="student-notification-empty">No notifications yet.</p>
           </div>
-        )}
-      </div>
-      <button
-        type="button"
-        className="student-settings-profile-btn"
-        onClick={() => setOpenSection("account")}
-        aria-label="Open account settings"
-      >
-        {avatarUrl ? <img src={avatarUrl} alt="Profile" /> : studentName.charAt(0).toUpperCase()}
-      </button>
+        }
+      />
 
       {sidebarOpen && (
         <div

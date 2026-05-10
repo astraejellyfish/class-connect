@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { requireTeacher } from "../../features/authRole";
@@ -15,6 +15,7 @@ import ClassStudentList from "../../components/teacher/ClassStudentList";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import AppLoadingScreen from "../../components/shared/AppLoadingScreen";
 import BottomNav, { teacherBottomNavItems } from "../../components/shared/BottomNav";
+import MobileHeader from "../../components/shared/MobileHeader";
 import JoinRequestsCard from "../../components/teacher/JoinRequestsCard";
 import TeacherSidebar from "../../components/shared/TeacherSidebar";
 import TeacherParticipationPanel from "../../components/teacher/TeacherParticipationPanel";
@@ -28,7 +29,6 @@ import {
   formatStudentShort,
 } from "../../utils/studentDisplay";
 
-const PICK_RESPONSE_SECONDS = 10;
 const ENDED_SESSION_LOG_RETENTION_MS = 2 * 60 * 60 * 1000;
 const AI_LOG_PATTERNS = [/^AI summary/i, /^Ask AI/i];
 
@@ -192,6 +192,7 @@ function ClassPage() {
   const [classData, setClassData] = useState(null);
   const [sessionActive, setSessionActive] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [sessionAlert, setSessionAlert] = useState("");
   const [aiSummary, setAiSummary] = useState(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState("");
@@ -227,6 +228,7 @@ function ClassPage() {
   const [studentListOpen, setStudentListOpen] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showAskAiModal, setShowAskAiModal] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [askAiPrompt, setAskAiPrompt] = useState("");
   const [askAiAnswer, setAskAiAnswer] = useState("");
   const [askAiLoading, setAskAiLoading] = useState(false);
@@ -242,26 +244,39 @@ function ClassPage() {
   const [sessionSelectedStudentIds, setSessionSelectedStudentIds] = useState(
     () => new Set()
   );
+  const sessionAlertTimeoutRef = useRef(null);
   const {
     skipFxActive,
     playNotificationSound,
     playResultSound,
     playAcceptSound,
     playSkipSound,
-    playCountdownSound,
     restartSessionMusic,
     pauseSessionMusic,
   } = useAudioControls({
     sessionActive,
-    countdownSeconds: PICK_RESPONSE_SECONDS,
   });
+
+  const showSessionAlert = useCallback((message) => {
+    window.clearTimeout(sessionAlertTimeoutRef.current);
+    setSessionAlert(message);
+    sessionAlertTimeoutRef.current = window.setTimeout(() => {
+      setSessionAlert("");
+    }, 4500);
+  }, []);
+
+  useEffect(() => {
+    return () => window.clearTimeout(sessionAlertTimeoutRef.current);
+  }, []);
 
   const addLog = useCallback((message, options = {}) => {
     const time = new Date().toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
-    setLogs((prev) => [{ time, message, createdAt: new Date().toISOString() }, ...prev]);
+    const createdAt = new Date().toISOString();
+    setLogs((prev) => [{ id: `local-${createdAt}`, time, message, createdAt }, ...prev]);
+    showSessionAlert(message);
 
     supabase
       .from("class_session_logs")
@@ -276,7 +291,7 @@ function ClassPage() {
           console.warn("Could not save session log:", error);
         }
       });
-  }, [classData?.sessionStartedAt, classData?.teacherId, classId]);
+  }, [classData?.sessionStartedAt, classData?.teacherId, classId, showSessionAlert]);
 
   const { handleStartSession, handleEndSession } = useTeacherClassSession({
     classId,
@@ -306,7 +321,6 @@ function ClassPage() {
       sessionSelectedStudentIds,
       volunteerQueue,
       savingVolunteer,
-      pickResponseSeconds: PICK_RESPONSE_SECONDS,
       addLog,
       setResolvingPick,
       setStudents,
@@ -322,7 +336,6 @@ function ClassPage() {
       playAcceptSound,
       playSkipSound,
       playResultSound,
-      playCountdownSound,
     });
 
   useEffect(() => {
@@ -417,7 +430,7 @@ function ClassPage() {
           .limit(1),
         supabase
           .from("class_session_logs")
-          .select("message, created_at")
+          .select("id, message, created_at")
           .eq("class_id", classId)
           .order("created_at", { ascending: false })
           .limit(30),
@@ -501,6 +514,7 @@ function ClassPage() {
 
       setLogs(
         visibleLogRows.map((row) => ({
+              id: row.id,
               time: new Date(row.created_at).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -868,12 +882,8 @@ function ClassPage() {
 
   const eligiblePresentCount = useMemo(
     () =>
-      students.filter(
-        (s) =>
-          s.present &&
-          (teacherSettings.repeatSelection || !sessionSelectedStudentIds.has(s.id))
-      ).length,
-    [students, teacherSettings.repeatSelection, sessionSelectedStudentIds]
+      students.filter((s) => s.present && !sessionSelectedStudentIds.has(s.id)).length,
+    [students, sessionSelectedStudentIds]
   );
 
   const latestEndLog = useMemo(
@@ -1110,6 +1120,33 @@ function ClassPage() {
     setJoinRequests(data || []);
   }, [classId]);
 
+  const refreshSessionLogs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("class_session_logs")
+      .select("id, message, created_at")
+      .eq("class_id", classId)
+      .order("created_at", { ascending: false })
+      .limit(40);
+
+    if (error) {
+      console.warn("Could not refresh session logs:", error);
+      return;
+    }
+
+    setLogs(
+      (data || []).map((row) => ({
+        id: row.id,
+        time: new Date(row.created_at).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        message: row.message,
+        isAiTool: isAiToolLog(row.message),
+        createdAt: row.created_at,
+      }))
+    );
+  }, [classId]);
+
   const refreshSelectionRequest = useCallback(async () => {
     const { data, error } = await supabase
       .from("participation_selection_requests")
@@ -1178,6 +1215,86 @@ function ClassPage() {
   useEffect(() => {
     if (loading || loadError || !classId) return undefined;
 
+    const classChannel = supabase
+      .channel(`teacher-class-status-${classId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "classes",
+          filter: `id=eq.${classId}`,
+        },
+        (payload) => {
+          const active = Boolean(payload.new?.session_active);
+          setSessionActive(active);
+          setClassData((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  sessionActive: active,
+                  sessionStartedAt: payload.new?.session_started_at,
+                }
+              : prev
+          );
+          showSessionAlert(active ? "Session started." : "Session ended.");
+          if (active) {
+            restartSessionMusic();
+          } else {
+            pauseSessionMusic();
+            setSelectedStudent(null);
+            setPendingPick(null);
+            setPickOutcome(null);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(classChannel);
+    };
+  }, [
+    classId,
+    loading,
+    loadError,
+    pauseSessionMusic,
+    restartSessionMusic,
+    setPendingPick,
+    setPickOutcome,
+    setSelectedStudent,
+    showSessionAlert,
+  ]);
+
+  useEffect(() => {
+    if (loading || loadError || !classId) return undefined;
+
+    const logsChannel = supabase
+      .channel(`teacher-session-logs-${classId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "class_session_logs",
+          filter: `class_id=eq.${classId}`,
+        },
+        (payload) => {
+          if (payload.new?.message) {
+            showSessionAlert(payload.new.message);
+          }
+          refreshSessionLogs();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(logsChannel);
+    };
+  }, [classId, loading, loadError, refreshSessionLogs, showSessionAlert]);
+
+  useEffect(() => {
+    if (loading || loadError || !classId) return undefined;
+
     const memberChannel = supabase
       .channel(`teacher-class-members-${classId}`)
       .on(
@@ -1215,6 +1332,7 @@ function ClassPage() {
         (payload) => {
           if (payload.eventType === "INSERT") {
             playNotificationSound();
+            showSessionAlert("A student volunteered.");
           }
           refreshVolunteerQueue();
         }
@@ -1227,7 +1345,14 @@ function ClassPage() {
       window.clearInterval(intervalId);
       supabase.removeChannel(channel);
     };
-  }, [classId, loading, loadError, refreshVolunteerQueue, playNotificationSound]);
+  }, [
+    classId,
+    loading,
+    loadError,
+    refreshVolunteerQueue,
+    playNotificationSound,
+    showSessionAlert,
+  ]);
 
   useEffect(() => {
     if (loading || loadError || !classId) return undefined;
@@ -1245,6 +1370,7 @@ function ClassPage() {
         (payload) => {
           if (payload.eventType === "INSERT") {
             playNotificationSound();
+            showSessionAlert("New join request received.");
           }
           refreshJoinRequests();
         }
@@ -1254,7 +1380,14 @@ function ClassPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [classId, loading, loadError, refreshJoinRequests, playNotificationSound]);
+  }, [
+    classId,
+    loading,
+    loadError,
+    refreshJoinRequests,
+    playNotificationSound,
+    showSessionAlert,
+  ]);
 
   useEffect(() => {
     if (loading || loadError || !classId) return undefined;
@@ -1270,11 +1403,16 @@ function ClassPage() {
           filter: `class_id=eq.${classId}`,
         },
         (payload) => {
+          if (payload.eventType === "INSERT") {
+            showSessionAlert("Student selected.");
+          }
           if (payload.eventType === "UPDATE") {
             if (payload.new?.status === "accepted") {
               playAcceptSound();
+              showSessionAlert("Selected student accepted.");
             } else if (payload.new?.status === "skip_requested") {
               playSkipSound();
+              showSessionAlert("Selected student requested to skip.");
             } else {
               playNotificationSound();
             }
@@ -1298,33 +1436,8 @@ function ClassPage() {
     playNotificationSound,
     playAcceptSound,
     playSkipSound,
+    showSessionAlert,
   ]);
-
-  useEffect(() => {
-    if (!pendingPick || resolvingPick) return;
-
-    if (pendingPick.responseStatus === "accepted") {
-      resolvePick(true, "awarded");
-      return;
-    }
-
-    if (pendingPick.responseStatus === "skip_requested") {
-      resolvePick(false, "skipped");
-      return;
-    }
-
-    if (!pendingPick.expiresAt) return;
-
-    const expiresAt = new Date(pendingPick.expiresAt).getTime();
-    if (!Number.isFinite(expiresAt)) return;
-
-    const delay = Math.max(0, expiresAt - Date.now());
-    const timeoutId = window.setTimeout(() => {
-      resolvePick(false, "expired");
-    }, delay);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [pendingPick, resolvingPick, resolvePick]);
 
   if (loading) {
     return <AppLoadingScreen title="Loading class" />;
@@ -1346,9 +1459,19 @@ function ClassPage() {
 
   return (
     <div className="teacher-dashboard teacher-dashboard--two-col">
-      <button type="button" className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
-        <img src="/icons/menu.png" alt="Menu" />
-      </button>
+      <MobileHeader
+        notificationOpen={notificationsOpen}
+        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        onProfileClick={() => navigate("/settings/account")}
+        profileContent={teacherName.charAt(0).toUpperCase()}
+        notificationPanel={
+          <div className="notification-panel">
+            <p className="notification-empty">
+              Session alerts appear on this class page as they happen.
+            </p>
+          </div>
+        }
+      />
 
       {sidebarOpen && (
         <div
@@ -1387,6 +1510,12 @@ function ClassPage() {
             handleCopyInvite();
           }}
         />
+
+        {sessionAlert && (
+          <div className="class-session-alert" role="status">
+            {sessionAlert}
+          </div>
+        )}
 
         <section className="class-session-grid">
           <TeacherParticipationPanel

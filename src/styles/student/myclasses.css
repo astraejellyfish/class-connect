@@ -812,10 +812,7 @@
   }
 
   .student-myclasses-dashboard .student-top-actions {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
-    gap: 10px;
-    width: 100%;
+    display: none;
   }
 
   .student-myclasses-dashboard .student-notification-wrap {
@@ -1096,6 +1093,13 @@
   .student-join-modal {
     padding: 18px;
     border-radius: 16px;
+  }
+}
+
+@media (max-width: 900px) {
+  .student-myclasses-dashboard::before {
+    display: none;
+    content: none;
   }
 }
 

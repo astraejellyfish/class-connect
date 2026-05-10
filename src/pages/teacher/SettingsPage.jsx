@@ -10,6 +10,7 @@ import {
 import ConfirmModal from "../../components/common/ConfirmModal";
 import ProfilePhotoUpload from "../../components/common/ProfilePhotoUpload";
 import BottomNav, { teacherBottomNavItems } from "../../components/shared/BottomNav";
+import MobileHeader from "../../components/shared/MobileHeader";
 import TeacherSidebar from "../../components/shared/TeacherSidebar";
 import {
   cropProfilePhotoToSquare,
@@ -24,7 +25,6 @@ const STORAGE_KEY = "class-connect-teacher-settings";
 
 const defaultSettings = {
   allowVolunteers: true,
-  repeatSelection: false,
   activityAlerts: true,
   volunteerAlerts: true,
   sessionAlerts: true,
@@ -248,31 +248,19 @@ export default function SettingsPage() {
 
   return (
     <div className="teacher-dashboard teacher-dashboard--settings">
-      <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
-        <img src="/icons/menu.png" alt="Menu" />
-      </button>
-      <div className="mobile-notification-wrap">
-        <button
-          type="button"
-          className="mobile-notification-btn"
-          onClick={() => setNotificationsOpen((open) => !open)}
-          aria-label="Open notifications"
-        >
-          <img src="/icons/notification.png" alt="" />
-        </button>
-        {notificationsOpen && (
-          <div className="notification-panel mobile-notification-panel">
+      <MobileHeader
+        notificationOpen={notificationsOpen}
+        onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        onProfileClick={() => navigate("/settings/account")}
+        profileContent={
+          avatarUrl ? <img src={avatarUrl} alt="Profile" /> : teacherName.charAt(0).toUpperCase()
+        }
+        notificationPanel={
+          <div className="notification-panel">
             <p className="notification-empty">No notifications yet.</p>
           </div>
-        )}
-      </div>
-      <button
-        className="mobile-profile-btn"
-        onClick={() => navigate("/settings/account")}
-        aria-label="Open profile"
-      >
-        {avatarUrl ? <img src={avatarUrl} alt="Profile" /> : teacherName.charAt(0).toUpperCase()}
-      </button>
+        }
+      />
 
       {sidebarOpen && (
         <div
@@ -408,12 +396,6 @@ export default function SettingsPage() {
               description="Students can place themselves in the volunteer queue."
               checked={settings.allowVolunteers}
               onChange={(value) => updateSetting("allowVolunteers", value)}
-            />
-            <ToggleRow
-              title="Repeat Selection"
-              description="Allow a student to be selected again during the same session."
-              checked={settings.repeatSelection}
-              onChange={(value) => updateSetting("repeatSelection", value)}
             />
           </SettingsSection>
 
