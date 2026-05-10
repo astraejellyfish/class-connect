@@ -3,6 +3,8 @@ import { formatFullNameTitle } from "../../utils/studentDisplay";
 
 function StudentParticipationPanel({
   students = [],
+  /** Wheel segments (may reorder / include picked student); defaults to students */
+  spinnerStudents = null,
   selectedStudent = null,
   sessionOngoing = false,
   currentSelection = null,
@@ -43,7 +45,7 @@ function StudentParticipationPanel({
           <span>No students in this class yet.</span>
         ) : (
           <ParticipationSpinner
-            students={students}
+            students={spinnerStudents ?? students}
             selectedStudent={selectedStudent}
             spinning={spinning}
             pendingPick={

@@ -20,6 +20,11 @@ import "../../styles/student/classpageS.css";
 
 const MAX_JOIN_REQUEST_ATTEMPTS = 3;
 
+const PARTICIPATION_SELECTION_SELECT =
+  "id, class_id, student_id, points, status, created_at, expires_at, students(id, name, email, student_id)";
+
+const SPINNER_MAX_SEGMENTS = 40;
+
 function getLastNameSortKey(name) {
   const parts = String(name || "")
     .trim()
@@ -293,7 +298,7 @@ export default function ClassPageStudent() {
           .limit(40),
         supabase
           .from("participation_selection_requests")
-          .select("id, class_id, student_id, points, status, created_at, expires_at")
+          .select(PARTICIPATION_SELECTION_SELECT)
           .eq("class_id", classId)
           .in("status", ["pending", "accepted", "skip_requested", "awarded", "skipped"])
           .order("created_at", { ascending: false })
@@ -360,7 +365,7 @@ export default function ClassPageStudent() {
 
       const { data: selectionRow, error: selectionError } = await supabase
         .from("participation_selection_requests")
-        .select("id, class_id, student_id, points, status, created_at, expires_at")
+        .select(PARTICIPATION_SELECTION_SELECT)
         .eq("class_id", classId)
         .eq("student_id", studentUserId)
         .eq("status", "pending")
@@ -391,9 +396,43 @@ export default function ClassPageStudent() {
   const joinRequestLimitReached = joinRequestAttempts >= MAX_JOIN_REQUEST_ATTEMPTS;
   const volunteerLimitReached =
     alreadyVolunteered;
-  const selectedStudent = currentSelection
-    ? students.find((student) => student.id === currentSelection.student_id) || null
-    : null;
+
+  const pointsByStudentIdFromActivity = useMemo(
+    () =>
+      activity.reduce((acc, row) => {
+        acc[row.student_id] = (acc[row.student_id] || 0) + (row.points || 0);
+        return acc;
+      }, {}),
+    [activity]
+  );
+
+  const selectedStudent = useMemo(() => {
+    if (!currentSelection?.student_id) return null;
+    const sid = currentSelection.student_id;
+    const fromRoster = students.find((student) => student.id === sid);
+    if (fromRoster) return fromRoster;
+    const joined = currentSelection.students;
+    const st = Array.isArray(joined) ? joined[0] : joined;
+    if (st?.name) {
+      return {
+        id: sid,
+        name: st.name,
+        points: pointsByStudentIdFromActivity[sid] || 0,
+        present: true,
+      };
+    }
+    return null;
+  }, [currentSelection, students, pointsByStudentIdFromActivity]);
+
+  const spinnerWheelStudents = useMemo(() => {
+    const sid = currentSelection?.student_id;
+    if (!sid || !selectedStudent) return students.slice(0, SPINNER_MAX_SEGMENTS);
+
+    const base = students.slice(0, SPINNER_MAX_SEGMENTS);
+    if (base.some((s) => s.id === sid)) return base;
+    return [selectedStudent, ...base.filter((s) => s.id !== sid)].slice(0, SPINNER_MAX_SEGMENTS);
+  }, [students, currentSelection?.student_id, selectedStudent]);
+
   const selectionFeedback = currentSelection && selectedStudent
     ? {
         isSelf: currentSelection.student_id === membership?.student_id,
@@ -460,8 +499,7 @@ export default function ClassPageStudent() {
   useEffect(() => {
     if (!currentSelection?.id || students.length === 0) return undefined;
 
-    const maxWheelSegments = 40;
-    const wheelStudents = students.slice(0, maxWheelSegments);
+    const wheelStudents = spinnerWheelStudents;
     const chosenIndex = wheelStudents.findIndex(
       (student) => student.id === currentSelection.student_id
     );
@@ -494,7 +532,7 @@ export default function ClassPageStudent() {
     }, 1500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [currentSelection?.id, currentSelection?.student_id, students]);
+  }, [currentSelection?.id, currentSelection?.student_id, students, spinnerWheelStudents]);
 
   const handleJoinSession = async () => {
     if (!canJoinSession) {
@@ -557,7 +595,7 @@ export default function ClassPageStudent() {
         membership?.student_id
           ? supabase
               .from("participation_selection_requests")
-              .select("id, class_id, student_id, points, status, created_at, expires_at")
+              .select(PARTICIPATION_SELECTION_SELECT)
               .eq("class_id", classId)
               .eq("student_id", membership.student_id)
               .eq("status", "pending")
@@ -565,7 +603,7 @@ export default function ClassPageStudent() {
           : { data: null },
         supabase
           .from("participation_selection_requests")
-          .select("id, class_id, student_id, points, status, created_at, expires_at")
+          .select(PARTICIPATION_SELECTION_SELECT)
           .eq("class_id", classId)
           // Include awarded/skipped so the student sees the resolved outcome
           // ("Points awarded" / "No points awarded") after the teacher acts.
@@ -1199,6 +1237,7 @@ export default function ClassPageStudent() {
               <div className="student-class-primary-stack">
                 <StudentParticipationPanel
                   students={students}
+                  spinnerStudents={spinnerWheelStudents}
                   selectedStudent={selectedStudent}
                   sessionOngoing={sessionOngoing}
                   currentSelection={currentSelection}
