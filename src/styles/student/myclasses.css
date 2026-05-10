@@ -666,10 +666,13 @@
     width: 100%;
     max-width: 100%;
     height: auto;
+    min-height: 100dvh;
     min-height: 100svh;
     padding: 16px;
     overflow: visible;
+    overflow-y: auto;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
   }
 
   .student-myclasses-dashboard {
@@ -680,10 +683,13 @@
     width: 100%;
     max-width: 100%;
     height: auto;
+    min-height: 100dvh;
     min-height: 100svh;
     padding: 12px;
     overflow: visible;
+    overflow-y: auto;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
   }
 
   .student-myclasses-dashboard::before {
@@ -724,6 +730,7 @@
     z-index: 80;
     width: 44px;
     height: 44px;
+    padding: 0;
     border: 2px solid var(--dark);
     border-radius: 50%;
     background: var(--green);
@@ -733,6 +740,16 @@
     font-size: 18px;
     font-weight: 800;
     cursor: pointer;
+    line-height: 1;
+    overflow: hidden;
+  }
+
+  .student-mobile-profile-btn img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
   }
 
   .student-myclasses-mobile-menu img {
@@ -770,6 +787,7 @@
 
   .student-main {
     height: auto;
+    min-height: 0;
     overflow: visible;
     overflow-x: hidden;
     scrollbar-gutter: auto;
@@ -778,6 +796,7 @@
 
   .student-myclasses-dashboard .student-main {
     height: auto;
+    min-height: 0;
     overflow: visible;
     overflow-x: hidden;
     padding-top: 58px;
@@ -916,7 +935,7 @@
   }
 }
 
-@media (max-width: 380px) {
+@media (max-width: 430px) {
   .student-dashboard {
     padding: 10px;
   }
@@ -945,6 +964,10 @@
   .student-mobile-profile-btn {
     right: 10px;
     font-size: 16px;
+  }
+
+  .student-myclasses-dashboard .student-icon-btn {
+    top: auto;
   }
 
   .student-myclasses-dashboard .student-notification-wrap {

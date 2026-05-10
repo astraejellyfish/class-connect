@@ -395,7 +395,7 @@
   text-transform: uppercase;
 }
 
-@media (max-width: 380px) {
+@media (max-width: 430px) {
   .settings-main {
     max-width: 100%;
   }

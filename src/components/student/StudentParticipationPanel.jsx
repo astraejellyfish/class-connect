@@ -21,18 +21,25 @@ function StudentParticipationPanel({
   onVolunteer,
 }) {
   return (
-    <section className="student-session-card student-readonly-participation">
-      <div className="student-session-head student-participation-head">
+    <section className="participation-card participation-card-main student-readonly-participation">
+      <div className="participation-head participation-head-row">
         <div>
-          <h2>Participation</h2>
-          <p>Watch the class spinner and volunteer when you want to participate.</p>
+          <h3>Participation</h3>
+          <p className="participation-sub">
+            Watch the class spinner and volunteer when you want to participate.
+          </p>
         </div>
-        <span className={`student-session-status ${sessionOngoing ? "is-live" : ""}`}>
-          {sessionOngoing ? "Live" : "Off"}
-        </span>
+        <div className="participation-toolbar">
+          <div
+            className={`session-status-pill ${sessionOngoing ? "active" : ""}`}
+            title="Session status"
+          >
+            {sessionOngoing ? "Live" : "Off"}
+          </div>
+        </div>
       </div>
 
-      <div className="student-spinner-box">
+      <div className="placeholder-box spinner-box">
         {students.length === 0 ? (
           <span>No students in this class yet.</span>
         ) : (

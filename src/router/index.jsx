@@ -10,6 +10,7 @@ import ClassPage from "../pages/teacher/ClassPage";
 import SettingsPage from "../pages/teacher/SettingsPage";
 import MyClassesStudent from "../pages/student/MyClasses";
 import ClassPageStudent from "../pages/student/ClassPageStudent";
+import JoinInviteRedirect from "../pages/student/JoinInviteRedirect";
 import SettingsPageStudent from "../pages/student/SettingsPage";
 import ProtectedRoute from "../components/shared/ProtectedRoute";
 
@@ -49,6 +50,10 @@ const router = createBrowserRouter([
   {
     path: "/student/classes",
     element: protect(<MyClassesStudent />, "student"),
+  },
+  {
+    path: "/student/join/:classCode",
+    element: protect(<JoinInviteRedirect />, "student"),
   },
   {
     path: "/student/class/:classId",

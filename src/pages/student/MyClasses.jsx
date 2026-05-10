@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { requireStudent } from "../../features/authRole";
 import { supabase } from "../../lib/supabase";
 import {
@@ -24,9 +24,11 @@ function mapMembership(row) {
 
 export default function MyClasses() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [studentId, setStudentId] = useState("");
   const [studentName, setStudentName] = useState("Student");
   const [studentEmail, setStudentEmail] = useState("");
+  const [studentAvatar, setStudentAvatar] = useState("");
   const [memberships, setMemberships] = useState([]);
   const [search, setSearch] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -44,6 +46,17 @@ export default function MyClasses() {
   useEffect(() => {
     loadStudentPage();
   }, []);
+
+  useEffect(() => {
+    const inviteCode = searchParams.get("join");
+    if (!inviteCode) return;
+
+    setJoinCode(inviteCode);
+    setJoinError("");
+    setJoinSuccess("");
+    setShowJoinModal(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30000);
@@ -73,6 +86,7 @@ export default function MyClasses() {
         "Student"
     );
     setStudentEmail(studentProfile?.email || user.email || "");
+    setStudentAvatar(studentProfile?.avatar_url || "");
 
     if (classError) {
       console.error("LOAD STUDENT CLASSES ERROR:", classError);
@@ -184,7 +198,11 @@ export default function MyClasses() {
         onClick={() => navigate("/student/settings")}
         aria-label="Open account settings"
       >
-        {studentName.charAt(0).toUpperCase()}
+        {studentAvatar ? (
+          <img src={studentAvatar} alt="Profile" />
+        ) : (
+          studentName.charAt(0).toUpperCase()
+        )}
       </button>
 
       {sidebarOpen && (
@@ -290,7 +308,13 @@ export default function MyClasses() {
             </div>
 
             <div className="student-profile-card">
-              <div className="student-avatar">{studentName.charAt(0).toUpperCase()}</div>
+              <div className="student-avatar">
+                {studentAvatar ? (
+                  <img src={studentAvatar} alt="Profile" />
+                ) : (
+                  studentName.charAt(0).toUpperCase()
+                )}
+              </div>
               <div>
                 <strong>{studentName}</strong>
                 <span>{studentEmail || "Student Account"}</span>

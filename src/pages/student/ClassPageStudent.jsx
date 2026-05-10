@@ -7,13 +7,10 @@ import { updateSelectionResponse } from "../../features/participation";
 import StudentParticipationPanel from "../../components/student/StudentParticipationPanel";
 import VolunteerQueue from "../../components/student/VolunteerQueue";
 import { useAudioControls } from "../../hooks/useAudioControls";
-import SummaryPreviewModal from "../../components/common/SummaryPreviewModal";
-import {
-  formatFullNameTitle,
-  formatStudentShort,
-} from "../../utils/studentDisplay";
+import { formatStudentShort } from "../../utils/studentDisplay";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import BottomNav, { studentBottomNavItems } from "../../components/shared/BottomNav";
+import "../../styles/teacher/classpage.css";
 import "../../styles/student/myclasses.css";
 import "../../styles/student/classpageS.css";
 
@@ -75,9 +72,6 @@ export default function ClassPageStudent() {
   const [sessionMessage, setSessionMessage] = useState("");
   const [status, setStatus] = useState("Loading class...");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [summary, setSummary] = useState(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [pendingSelection, setPendingSelection] = useState(null);
   const [selectionCountdown, setSelectionCountdown] = useState(0);
   const [selectionMessage, setSelectionMessage] = useState("");
@@ -246,32 +240,6 @@ export default function ClassPageStudent() {
     ? students.find((student) => student.id === pendingSelection.student_id) || null
     : null;
   const presentCount = students.filter((student) => student.present).length;
-  const aiStats = useMemo(() => {
-    const ranked = [...students]
-      .map((student) => ({
-        ...student,
-        pts: student.points ?? 0,
-      }))
-      .sort((a, b) => b.pts - a.pts);
-    const maxPts = Math.max(...ranked.map((student) => student.pts), 1);
-    const top = ranked.slice(0, 8);
-    const least = ranked.length > 0 ? ranked[ranked.length - 1] : null;
-    const leastPts = least?.pts ?? 0;
-    const leastStudents = ranked.filter((student) => student.pts === leastPts);
-    const presentCount = students.filter((student) => student.present !== false).length;
-    const absentCount = students.length - presentCount;
-
-    return {
-      ranked,
-      maxPts,
-      top,
-      least,
-      leastPts,
-      leastStudents,
-      presentCount,
-      absentCount,
-    };
-  }, [students]);
 
   const topScorers = useMemo(
     () =>
@@ -627,186 +595,6 @@ export default function ClassPageStudent() {
     setPendingSelection(null);
   };
 
-  const buildLocalSummary = () => {
-    const spread =
-      aiStats.ranked.length > 1
-        ? aiStats.ranked[0].pts - aiStats.ranked[aiStats.ranked.length - 1].pts
-        : 0;
-    const leastLabel = aiStats.leastStudents.length
-      ? `${aiStats.leastStudents.length} student${
-          aiStats.leastStudents.length === 1 ? "" : "s"
-        } at ${aiStats.leastPts} pt${aiStats.leastPts === 1 ? "" : "s"}`
-      : "No students";
-
-    return {
-      title: `Participation Report - ${classData?.class_name || "Class"}`,
-      overview: `${activity.length} activity item${
-        activity.length === 1 ? "" : "s"
-      } logged with ${totalPoints} total point${
-        totalPoints === 1 ? "" : "s"
-      } across ${students.length} student${students.length === 1 ? "" : "s"}.`,
-      attendance: `${aiStats.presentCount} present, ${aiStats.absentCount} absent.`,
-      yourPoints: `You currently have ${studentOwnPoints} point${
-        studentOwnPoints === 1 ? "" : "s"
-      }.`,
-      least: leastLabel,
-      leastList: aiStats.leastStudents.map((student) => ({
-        id: student.id,
-        name: formatFullNameTitle(student.name),
-        points: student.pts,
-      })),
-      spread,
-      recommendation:
-        studentOwnPoints > 0
-          ? "Keep joining live activities when you are ready to participate."
-          : "No points yet. Volunteer or wait for the teacher selection during a live session.",
-    };
-  };
-
-  const handleGenerateSummary = () => {
-    setSummaryLoading(true);
-
-    const localSummary = buildLocalSummary();
-    setTimeout(() => {
-      setSummary(localSummary);
-      setShowSummaryModal(true);
-      setSummaryLoading(false);
-    }, 700);
-  };
-
-  const summarySections = useMemo(() => {
-    if (!summary) return [];
-
-    const startedAt = classData?.session_started_at
-      ? new Date(classData.session_started_at)
-      : null;
-    const formatDate = (date) =>
-      date && Number.isFinite(date.getTime()) ? date.toLocaleDateString() : "N/A";
-    const formatTime = (date) =>
-      date && Number.isFinite(date.getTime())
-        ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        : "N/A";
-    const statsByStudentId = activity.reduce((acc, row) => {
-      const current = acc[row.student_id] || { timesCalled: 0, points: 0 };
-      acc[row.student_id] = {
-        timesCalled: current.timesCalled + 1,
-        points: current.points + (row.points || 0),
-      };
-      return acc;
-    }, {});
-    const activeParticipants = students
-      .filter((student) => (statsByStudentId[student.id]?.timesCalled || 0) > 0)
-      .map((student) => {
-        const stats = statsByStudentId[student.id] || {};
-        return `${formatFullNameTitle(student.name)} | ${
-          stats.timesCalled || 0
-        } | ${stats.points || 0} pt${stats.points === 1 ? "" : "s"}`;
-      });
-    const lowParticipants = students
-      .filter((student) => (statsByStudentId[student.id]?.timesCalled || 0) === 0)
-      .map((student) => `${formatFullNameTitle(student.name)} | Not Called`);
-    const volunteerNames = volunteerQueue.map((item) => formatFullNameTitle(item.name));
-    const highest = topScorers[0];
-    const averagePoints =
-      students.length > 0 ? (totalPoints / students.length).toFixed(1) : "0";
-
-    return [
-      {
-        label: "Class Connect",
-        value: `Class Connect - LEVEL UP YOUR CLASS\nInstitution: Gordon College - College of Computer Studies\nInstructor: ${
-          classData?.teacher?.name || "Teacher"
-        }\nSubject: ${classData?.class_name || "N/A"}\nClass Code: ${
-          classData?.class_code || "N/A"
-        }\nProgram/Block: ${classData?.program || "N/A"}`,
-      },
-      {
-        label: "Session Details",
-        value: `Session Title: Recitation 1\nDate: ${formatDate(
-          startedAt || new Date()
-        )}\nTime Started: ${formatTime(startedAt)}\nTime Ended: ${
-          classData?.session_active ? "Ongoing" : "N/A"
-        }\nDuration: ${classData?.session_active ? "Ongoing" : "N/A"}\nTotal Students Present: ${
-          aiStats.presentCount
-        }\nLate Entries (after 15 min): ${joinRequest ? 1 : 0}`,
-      },
-      {
-        label: "Overall Participation Summary (Local)",
-        value: summary.overview,
-      },
-      {
-        label: "Participation Breakdown - Active Participants",
-        table: {
-          headers: ["Student Name", "Times Called", "Points Earned"],
-          rows: activeParticipants.length
-            ? students
-                .filter((student) => (statsByStudentId[student.id]?.timesCalled || 0) > 0)
-                .map((student) => {
-                  const stats = statsByStudentId[student.id] || {};
-                  return [
-                    formatFullNameTitle(student.name),
-                    stats.timesCalled || 0,
-                    `${stats.points || 0} pt${stats.points === 1 ? "" : "s"}`,
-                  ];
-                })
-            : [["No active participants recorded.", "-", "-"]],
-        },
-      },
-      {
-        label: "Participation Breakdown - Low / No Participation",
-        table: {
-          headers: ["Student Name", "Status"],
-          rows: lowParticipants.length
-            ? students
-                .filter((student) => (statsByStudentId[student.id]?.timesCalled || 0) === 0)
-                .map((student) => [formatFullNameTitle(student.name), "Not Called"])
-            : [["No low participation students listed.", "-"]],
-        },
-      },
-      {
-        label: "Volunteer Activity",
-        value: `${volunteerNames.length ? volunteerNames.join("\n") : "No volunteer activity noted."}\n\nInsight: Volunteer activity indicates willingness to participate.`,
-      },
-      {
-        label: "Point Distribution",
-        value: `Total Points Given: ${totalPoints}\nAverage Points per Student: ${averagePoints}\nHighest Points Earned: ${
-          highest
-            ? `${formatFullNameTitle(highest.name)} - ${highest.points || 0} pts`
-            : "N/A"
-        }`,
-      },
-      {
-        label: "Engagement Analysis",
-        value: `Points gap is ${summary.spread} pt${
-          summary.spread === 1 ? "" : "s"
-        }. ${summary.recommendation}`,
-      },
-      {
-        label: "Recommendations",
-        value:
-          "Prioritize students with low participation in the next session\nEncourage quieter students using the volunteer feature\nMaintain current pacing and question difficulty",
-      },
-      {
-        label: "System Notes",
-        value:
-          "Weighted Random Selection was used to ensure fairness\nVolunteer queue was recorded and prioritized\nParticipation tracking is based on real-time session logs",
-      },
-      {
-        label: "Generated By",
-        value: `Generated by Class Connect AI Assistant\nDate Generated: ${new Date().toLocaleString()}`,
-      },
-    ];
-  }, [
-    activity,
-    aiStats.presentCount,
-    classData,
-    joinRequest,
-    students,
-    summary,
-    topScorers,
-    totalPoints,
-    volunteerQueue,
-  ]);
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/login");
@@ -959,31 +747,6 @@ export default function ClassPageStudent() {
               </div>
 
               <aside className="student-side-stack">
-                <section className="student-session-card student-top-scorers-card">
-                  <div className="student-volunteer-head">
-                    <div>
-                      <h2>Top 5 Scorers</h2>
-                    </div>
-                    <span>{topScorers.length}</span>
-                  </div>
-
-                  <ol className="student-top-scorers-list">
-                    {topScorers.length === 0 ? (
-                      <li>No scores yet.</li>
-                    ) : (
-                      topScorers.map((student, index) => (
-                        <li key={student.id}>
-                          <span>{index + 1}</span>
-                          <strong>{formatStudentShort(student.name)}</strong>
-                          <small>
-                            {student.points || 0} pt{student.points === 1 ? "" : "s"}
-                          </small>
-                        </li>
-                      ))
-                    )}
-                  </ol>
-                </section>
-
                 <section className="student-session-card student-activity-card">
                   <div className="student-activity-session-slot">
                     <p className="student-class-kicker">Session &amp; invites</p>
@@ -1025,6 +788,31 @@ export default function ClassPageStudent() {
                       })
                     )}
                   </div>
+                </section>
+
+                <section className="student-session-card student-top-scorers-card">
+                  <div className="student-volunteer-head">
+                    <div>
+                      <h2>Top 5 Scorers</h2>
+                    </div>
+                    <span>{topScorers.length}</span>
+                  </div>
+
+                  <ol className="student-top-scorers-list">
+                    {topScorers.length === 0 ? (
+                      <li>No scores yet.</li>
+                    ) : (
+                      topScorers.map((student, index) => (
+                        <li key={student.id}>
+                          <span>{index + 1}</span>
+                          <strong>{formatStudentShort(student.name)}</strong>
+                          <small>
+                            {student.points || 0} pt{student.points === 1 ? "" : "s"}
+                          </small>
+                        </li>
+                      ))
+                    )}
+                  </ol>
                 </section>
               </aside>
             </section>
@@ -1079,159 +867,6 @@ export default function ClassPageStudent() {
                 )}
               </div>
             </section>
-
-            <section className="student-session-card student-ai-summary-card">
-              <div className="student-ai-summary-header">
-                <div>
-                  <p className="student-class-kicker">Local insights</p>
-                  <h2>Class Summary</h2>
-                </div>
-                <button
-                  type="button"
-                  className="student-ai-generate-btn"
-                  onClick={handleGenerateSummary}
-                  disabled={summaryLoading}
-                >
-                  {summaryLoading ? "Generating..." : "Generate Preview"}
-                </button>
-              </div>
-
-              <div className="student-ai-summary-grid">
-                <article>
-                  <strong>{totalPoints}</strong>
-                  <span>Total points</span>
-                </article>
-                <article>
-                  <strong>{activity.length}</strong>
-                  <span>Selections logged</span>
-                </article>
-                <article>
-                  <strong>{students.length}</strong>
-                  <span>Students</span>
-                </article>
-                <article>
-                  <strong>{aiStats.absentCount}</strong>
-                  <span>Absent</span>
-                </article>
-                <article>
-                  <strong>{aiStats.presentCount}</strong>
-                  <span>Present students</span>
-                </article>
-              </div>
-
-              <div className="student-ai-least-block">
-                <div>
-                  <h3>Least points students</h3>
-                  <p>
-                    {aiStats.least
-                      ? `${aiStats.leastPts} pt${aiStats.leastPts === 1 ? "" : "s"}`
-                      : "No points recorded yet."}
-                  </p>
-                </div>
-                <div className="student-ai-least-list">
-                  {aiStats.leastStudents.length === 0 ? (
-                    <span>No students yet</span>
-                  ) : (
-                    aiStats.leastStudents.map((student) => (
-                      <span key={student.id} title={student.name}>
-                        {formatFullNameTitle(student.name)} - {student.pts} pt
-                        {student.pts === 1 ? "" : "s"}
-                      </span>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="student-ai-chart-block">
-                <h3>Points by student</h3>
-                <p className="student-ai-chart-hint">
-                  Relative share of total points (top 8).
-                </p>
-                <div className="student-ai-bar-chart">
-                  {aiStats.top.length === 0 ? (
-                    <p className="student-ai-empty">No points recorded yet.</p>
-                  ) : (
-                    aiStats.top.map((student) => {
-                      const pts = student.pts ?? 0;
-                      const pct =
-                        totalPoints > 0 ? Math.round((pts / totalPoints) * 100) : 0;
-                      const barPct =
-                        pts > 0 && aiStats.maxPts > 0
-                          ? Math.round((pts / aiStats.maxPts) * 100)
-                          : 0;
-
-                      return (
-                        <div className="student-ai-bar-row" key={student.id}>
-                          <span className="student-ai-bar-name" title={student.name}>
-                            {formatStudentShort(student.name)}
-                          </span>
-                          <div className="student-ai-bar-track">
-                            {pts > 0 ? (
-                              <div
-                                className="student-ai-bar-fill"
-                                style={{ width: `${barPct}%` }}
-                              />
-                            ) : null}
-                          </div>
-                          <span className="student-ai-bar-meta">
-                            {pts} pt{pts === 1 ? "" : "s"} ({pct}%)
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              <div className="student-ai-timeline-block">
-                <h3>Recent activity</h3>
-                <div className="student-ai-timeline">
-                  {activity.length === 0 ? (
-                    <p className="student-ai-empty">No log entries yet.</p>
-                  ) : (
-                    activity.slice(0, 6).map((row) => {
-                      const student = Array.isArray(row.students)
-                        ? row.students[0]
-                        : row.students;
-
-                      return (
-                        <div className="student-ai-timeline-row" key={row.id}>
-                          <span className="student-ai-timeline-time">
-                            {new Date(row.created_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                          <span className="student-ai-timeline-msg">
-                            {formatStudentShort(student?.name || "Student")} earned{" "}
-                            {row.points} pt{row.points === 1 ? "" : "s"}
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {summary && (
-                <button
-                  type="button"
-                  className="student-ai-generate-btn student-ai-preview-btn"
-                  onClick={() => setShowSummaryModal(true)}
-                >
-                  Preview PDF
-                </button>
-              )}
-            </section>
-
-            {showSummaryModal && summary && (
-              <SummaryPreviewModal
-                title={summary.title}
-                subtitle={`${classData?.subject_code || ""} ${classData?.class_code || ""}`.trim()}
-                sections={summarySections}
-                onClose={() => setShowSummaryModal(false)}
-              />
-            )}
           </>
         )}
       </main>

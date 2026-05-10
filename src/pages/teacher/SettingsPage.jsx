@@ -12,6 +12,7 @@ import ProfilePhotoUpload from "../../components/common/ProfilePhotoUpload";
 import BottomNav, { teacherBottomNavItems } from "../../components/shared/BottomNav";
 import TeacherSidebar from "../../components/shared/TeacherSidebar";
 import {
+  cropProfilePhotoToSquare,
   getProfilePhotoError,
   updateProfilePhoto,
   uploadProfilePhoto,
@@ -149,15 +150,29 @@ export default function SettingsPage() {
     navigate("/login");
   };
 
-  const handleProfilePhotoChange = (file) => {
+  const handleProfilePhotoChange = async (file) => {
     if (profilePhotoPreview) {
       URL.revokeObjectURL(profilePhotoPreview);
     }
 
-    setProfilePhoto(file);
-    setProfilePhotoPreview(file ? URL.createObjectURL(file) : "");
+    setProfilePhoto(null);
+    setProfilePhotoPreview("");
     setProfilePhotoMessage("");
-    setProfilePhotoError(getProfilePhotoError(file));
+
+    const photoError = getProfilePhotoError(file);
+    if (!file || photoError) {
+      setProfilePhotoError(photoError);
+      return;
+    }
+
+    try {
+      const croppedFile = await cropProfilePhotoToSquare(file);
+      setProfilePhoto(croppedFile);
+      setProfilePhotoPreview(URL.createObjectURL(croppedFile));
+      setProfilePhotoError("");
+    } catch (error) {
+      setProfilePhotoError(error.message || "Could not crop profile photo.");
+    }
   };
 
   const handleUploadProfilePhoto = async () => {
@@ -256,7 +271,7 @@ export default function SettingsPage() {
         onClick={() => navigate("/settings/account")}
         aria-label="Open profile"
       >
-        {teacherName.charAt(0).toUpperCase()}
+        {avatarUrl ? <img src={avatarUrl} alt="Profile" /> : teacherName.charAt(0).toUpperCase()}
       </button>
 
       {sidebarOpen && (

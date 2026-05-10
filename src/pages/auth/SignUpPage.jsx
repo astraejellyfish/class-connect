@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import ProfilePhotoUpload from "../../components/common/ProfilePhotoUpload";
 import {
+  cropProfilePhotoToSquare,
   getProfilePhotoError,
   uploadProfilePhoto,
 } from "../../features/profilePhoto";
@@ -19,8 +20,10 @@ export default function SignUpPage() {
   const [role, setRole] = useState("");
   const [agree, setAgree] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState("");
+  const [profilePhotoError, setProfilePhotoError] = useState("");
 
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -74,6 +77,7 @@ export default function SignUpPage() {
 
     const photoError = getProfilePhotoError(profilePhoto);
     if (photoError) {
+      setProfilePhotoError(photoError);
       setErrorMsg(photoError);
       return;
     }
@@ -152,14 +156,32 @@ export default function SignUpPage() {
     }
   };
 
-  const handleProfilePhotoChange = (file) => {
+  const handleProfilePhotoChange = async (file) => {
     if (profilePhotoPreview) {
       URL.revokeObjectURL(profilePhotoPreview);
     }
 
-    setProfilePhoto(file);
-    setProfilePhotoPreview(file ? URL.createObjectURL(file) : "");
-    setErrorMsg(getProfilePhotoError(file));
+    setProfilePhoto(null);
+    setProfilePhotoPreview("");
+
+    const photoError = getProfilePhotoError(file);
+    if (!file || photoError) {
+      setProfilePhotoError(photoError);
+      setErrorMsg(photoError);
+      return;
+    }
+
+    try {
+      const croppedFile = await cropProfilePhotoToSquare(file);
+      setProfilePhoto(croppedFile);
+      setProfilePhotoPreview(URL.createObjectURL(croppedFile));
+      setProfilePhotoError("");
+      setErrorMsg("");
+    } catch (error) {
+      const message = error.message || "Could not crop profile photo.";
+      setProfilePhotoError(message);
+      setErrorMsg(message);
+    }
   };
 
   return (
@@ -191,22 +213,33 @@ export default function SignUpPage() {
               <div className="solid-card-bar"></div>
 
               <h2>Sign Up</h2>
+              <p className="auth-card-sub">
+                Create your account using your Gordon College email.
+              </p>
 
-              <label>First name</label>
-              <input
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                autoComplete="given-name"
-                disabled={isSigningUp}
-              />
+              <div className="auth-form-grid">
+                <div className="auth-field">
+                  <label>First name</label>
+                  <input
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="First name"
+                    autoComplete="given-name"
+                    disabled={isSigningUp}
+                  />
+                </div>
 
-              <label>Last name</label>
-              <input
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                autoComplete="family-name"
-                disabled={isSigningUp}
-              />
+                <div className="auth-field">
+                  <label>Last name</label>
+                  <input
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Last name"
+                    autoComplete="family-name"
+                    disabled={isSigningUp}
+                  />
+                </div>
+              </div>
 
               <label>Role</label>
               <div className="select-wrapper">
@@ -233,6 +266,7 @@ export default function SignUpPage() {
                     onChange={(e) =>
                       setStudentId(e.target.value.replace(/\D/g, ""))
                     }
+                    placeholder="9-digit ID"
                     disabled={isSigningUp}
                   />
                 </>
@@ -241,7 +275,9 @@ export default function SignUpPage() {
               <label>Email</label>
               <div className="email-input">
                 <input
+                  value={emailName}
                   onChange={(e) => setEmailName(e.target.value)}
+                  placeholder="username"
                   disabled={isSigningUp}
                 />
                 <span>@gordoncollege.edu.ph</span>
@@ -291,12 +327,27 @@ export default function SignUpPage() {
                 </div>
               </div>
 
-              <ProfilePhotoUpload
-                name={`${firstName || "U"} ${lastName || ""}`.trim()}
-                previewUrl={profilePhotoPreview}
-                disabled={isSigningUp}
-                onFileChange={handleProfilePhotoChange}
-              />
+              <div className="auth-photo-row">
+                <button
+                  type="button"
+                  className="auth-photo-trigger"
+                  onClick={() => setShowPhotoModal(true)}
+                  disabled={isSigningUp}
+                >
+                  <span className="auth-photo-thumb" aria-hidden="true">
+                    {profilePhotoPreview ? (
+                      <img src={profilePhotoPreview} alt="" />
+                    ) : (
+                      (firstName || "U").charAt(0).toUpperCase()
+                    )}
+                  </span>
+                  <span className="auth-photo-copy">
+                    <strong>2x2 Profile Photo</strong>
+                    <small>{profilePhoto ? "Photo selected" : "Optional — add a photo"}</small>
+                  </span>
+                  <span className="auth-photo-cta">Upload</span>
+                </button>
+              </div>
 
               <div className="terms-row">
                 <input type="checkbox" checked={agree} readOnly />
@@ -325,6 +376,62 @@ export default function SignUpPage() {
           </div>
         </div>
       </div>
+
+      {showPhotoModal && (
+        <div className="modal-overlay" onClick={() => setShowPhotoModal(false)}>
+          <div
+            className="info-modal photo-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-bar"></div>
+            <div className="photo-modal-content">
+              <div className="photo-modal-head">
+                <div>
+                  <h2>Upload profile photo</h2>
+                  <p>Please upload jpg or png files only.</p>
+                </div>
+                <button
+                  type="button"
+                  className="photo-modal-close"
+                  onClick={() => setShowPhotoModal(false)}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <ProfilePhotoUpload
+                name={`${firstName || "U"} ${lastName || ""}`.trim()}
+                previewUrl={profilePhotoPreview}
+                disabled={isSigningUp}
+                error={profilePhotoError}
+                onFileChange={handleProfilePhotoChange}
+              />
+
+              <div className="photo-modal-actions">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => {
+                    handleProfilePhotoChange(null);
+                  }}
+                  disabled={isSigningUp || (!profilePhoto && !profilePhotoPreview)}
+                >
+                  Remove
+                </button>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() => setShowPhotoModal(false)}
+                  disabled={isSigningUp}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showTerms && (
         <div className="modal-overlay" onClick={() => setShowTerms(false)}>
