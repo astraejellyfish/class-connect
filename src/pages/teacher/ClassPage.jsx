@@ -1452,16 +1452,11 @@ function ClassPage() {
             );
           }
 
-          if (payload.eventType === "INSERT") {
-            showSessionAlert("Student selected.");
-          }
           if (payload.eventType === "UPDATE") {
             if (payload.new?.status === "accepted") {
               playAcceptSound();
-              showSessionAlert("Selected student accepted.");
             } else if (payload.new?.status === "skip_requested") {
               playSkipSound();
-              showSessionAlert("Selected student requested to skip.");
             } else {
               playNotificationSound();
             }
@@ -1482,7 +1477,6 @@ function ClassPage() {
     playNotificationSound,
     playAcceptSound,
     playSkipSound,
-    showSessionAlert,
   ]);
 
   if (loading) {

@@ -1,6 +1,6 @@
--- Students must see every class_members row for their class (same roster as the teacher).
--- The membership check MUST NOT query class_members inside a class_members policy (infinite recursion).
--- Use a SECURITY DEFINER helper so the enrollment check bypasses RLS on class_members.
+-- If you already ran the first version of 20260511121500 (self-join on class_members),
+-- Postgres reports: infinite recursion detected in policy for relation "class_members".
+-- Run this migration (or paste this file) to replace that policy with a safe version.
 
 create or replace function public.current_user_enrolled_in_class(p_class_id uuid)
 returns boolean
@@ -10,7 +10,6 @@ set search_path = public
 stable
 as $$
 begin
-  -- Required: plain SELECT on class_members here would recurse into the same RLS policy.
   perform set_config('row_security', 'off', true);
   return exists (
     select 1

@@ -433,14 +433,6 @@ export default function ClassPageStudent() {
     return [selectedStudent, ...base.filter((s) => s.id !== sid)].slice(0, SPINNER_MAX_SEGMENTS);
   }, [students, currentSelection?.student_id, selectedStudent]);
 
-  const selectionFeedback = currentSelection && selectedStudent
-    ? {
-        isSelf: currentSelection.student_id === membership?.student_id,
-        name: formatFullNameTitle(selectedStudent.name),
-        status: currentSelection.status,
-        points: currentSelection.points,
-      }
-    : null;
   const presentCount = students.filter((student) => student.present).length;
 
   const topScorers = useMemo(
@@ -782,21 +774,12 @@ export default function ClassPageStudent() {
           filter: `class_id=eq.${classId}`,
         },
         (payload) => {
-          const selectionStudent = studentsRef.current.find(
-            (student) => student.id === payload.new?.student_id
-          );
-          const selectionName = selectionStudent
-            ? formatFullNameTitle(selectionStudent.name)
-            : "A student";
-
           if (
             payload.eventType === "INSERT" &&
             payload.new?.student_id === membership?.student_id
           ) {
             playResultSound();
-            showSessionAlert("You were picked!");
           } else if (payload.eventType === "INSERT") {
-            showSessionAlert(`${selectionName} was picked.`);
             playNotificationSound();
           } else if (
             payload.eventType === "UPDATE" &&
@@ -808,10 +791,8 @@ export default function ClassPageStudent() {
               playSkipSound();
             } else if (payload.new?.status === "awarded") {
               playAcceptSound();
-              showSessionAlert(`+${payload.new.points} pt${payload.new.points === 1 ? "" : "s"} awarded!`);
             } else if (payload.new?.status === "skipped") {
               playSkipSound();
-              showSessionAlert("Selection skipped.");
             } else {
               playNotificationSound();
             }
@@ -839,7 +820,7 @@ export default function ClassPageStudent() {
         },
         (payload) => {
           const cleanMessage = cleanSessionMessage(payload.new?.message);
-          if (cleanMessage) {
+          if (cleanMessage && !/was selected\.?$/i.test(String(cleanMessage).trim())) {
             showSessionAlert(cleanMessage);
           }
           const fallbackSelection = getLatestSelectionFromLogs(
@@ -1191,39 +1172,6 @@ export default function ClassPageStudent() {
           <div className="class-session-alert student-class-session-alert" role="status">
             {sessionAlert}
           </div>
-        )}
-
-        {!status && selectionFeedback && (
-          <section
-            className={`student-picked-banner ${
-              selectionFeedback.isSelf ? "is-self" : ""
-            }`}
-            role="status"
-          >
-            <p className="student-class-kicker">Spinner result</p>
-            <h2>
-              {selectionFeedback.isSelf
-                ? "You were picked!"
-                : `${selectionFeedback.name} was picked.`}
-            </h2>
-            <span>
-              {selectionFeedback.status === "accepted"
-                ? "Accepted. Waiting for teacher to award points."
-                : selectionFeedback.status === "skip_requested"
-                  ? "Skip requested."
-                  : selectionFeedback.status === "awarded"
-                    ? `+${selectionFeedback.points} point${
-                        selectionFeedback.points === 1 ? "" : "s"
-                      } awarded.`
-                    : selectionFeedback.status === "skipped"
-                      ? "Selection skipped."
-                      : selectionFeedback.status === "selected"
-                        ? "Waiting for teacher confirmation."
-                  : `${selectionFeedback.points} point${
-                      selectionFeedback.points === 1 ? "" : "s"
-                    } offered.`}
-            </span>
-          </section>
         )}
 
         {status ? (
