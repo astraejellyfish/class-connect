@@ -318,7 +318,6 @@ function ClassPage() {
       pendingPick,
       awardPointsInput,
       teacherSettings,
-      sessionSelectedStudentIds,
       volunteerQueue,
       savingVolunteer,
       addLog,
@@ -329,7 +328,6 @@ function ClassPage() {
       setSpinning,
       setSpinRotation,
       setSelectedStudent,
-      setSessionSelectedStudentIds,
       setSelectionRequestUnavailable,
       setSavingVolunteer,
       setVolunteerQueue,
@@ -881,9 +879,8 @@ function ClassPage() {
   );
 
   const eligiblePresentCount = useMemo(
-    () =>
-      students.filter((s) => s.present && !sessionSelectedStudentIds.has(s.id)).length,
-    [students, sessionSelectedStudentIds]
+    () => students.filter((s) => s.present).length,
+    [students]
   );
 
   const latestEndLog = useMemo(

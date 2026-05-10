@@ -7,7 +7,10 @@ import { updateSelectionResponse } from "../../features/participation";
 import StudentParticipationPanel from "../../components/student/StudentParticipationPanel";
 import VolunteerQueue from "../../components/student/VolunteerQueue";
 import { useAudioControls } from "../../hooks/useAudioControls";
-import { formatStudentShort } from "../../utils/studentDisplay";
+import {
+  formatFullNameTitle,
+  formatStudentShort,
+} from "../../utils/studentDisplay";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import BottomNav, { studentBottomNavItems } from "../../components/shared/BottomNav";
 import MobileHeader from "../../components/shared/MobileHeader";
@@ -51,6 +54,73 @@ function mapQueueRow(row) {
     name: student?.name || student?.email || "Student",
     createdAt: row.created_at,
   };
+}
+
+function formatLocalActivityTime(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function cleanSessionMessage(message) {
+  const text = String(message || "").trim();
+  if (!text) return "";
+
+  const selectedMatch =
+    text.match(/^(.+?)\s+was selected\.?$/i) ||
+    text.match(/^(.+?)\s+selected\. Waiting for student response\.?$/i) ||
+    text.match(/^(.+?)\s+selected\. Selection request table is unavailable.*$/i);
+  if (selectedMatch) {
+    return `${formatFullNameTitle(selectedMatch[1])} was selected.`;
+  }
+
+  const awardedMatch =
+    text.match(/^Teacher awarded\s+(\d+)\s+points?\s+to\s+(.+?)\.?$/i) ||
+    text.match(/^(.+?)\s+\(\s*(.+?)\s*\)\s+is selected for\s+(\d+)\s+pts?\s+- accepted\.?$/i);
+  if (awardedMatch) {
+    const points = awardedMatch[3] || awardedMatch[1];
+    const name = awardedMatch[2];
+    return `Teacher awarded ${points} point${Number(points) === 1 ? "" : "s"} to ${formatFullNameTitle(name)}.`;
+  }
+
+  const rawSkipMatch = text.match(
+    /^(.+?)\s+\(\s*(.+?)\s*\)\s+is selected\s+-\s+(?:skip requested|expired).*/i
+  );
+  if (rawSkipMatch) {
+    return `${formatFullNameTitle(rawSkipMatch[2])} requested to skip.`;
+  }
+
+  const simpleSkipMatch = text.match(/^(.+?)\s+requested to skip\.?$/i);
+  if (simpleSkipMatch) {
+    return `${formatFullNameTitle(simpleSkipMatch[1])} requested to skip.`;
+  }
+
+  const volunteerMatch = text.match(/^(.+?)\s+volunteered\.?$/i);
+  if (volunteerMatch) {
+    return `${formatFullNameTitle(volunteerMatch[1])} volunteered.`;
+  }
+
+  const skippedVolunteerMatch = text.match(/^(.+?)\s+was skipped in the volunteer queue\.?$/i);
+  if (skippedVolunteerMatch) {
+    return `${formatFullNameTitle(skippedVolunteerMatch[1])} was skipped in the volunteer queue.`;
+  }
+
+  const allowedSystemMessages = new Set([
+    "Session started. Students can enter within 15 minutes.",
+    "Session ended.",
+    "Join request approved.",
+  ]);
+
+  if (allowedSystemMessages.has(text)) return text;
+  if (/Could not|unavailable|removed from class|Class details updated/i.test(text)) return "";
+
+  return text;
 }
 
 export default function ClassPageStudent() {
@@ -269,6 +339,14 @@ export default function ClassPageStudent() {
   const selectedStudent = currentSelection
     ? students.find((student) => student.id === currentSelection.student_id) || null
     : null;
+  const selectionFeedback = currentSelection && selectedStudent
+    ? {
+        isSelf: currentSelection.student_id === membership?.student_id,
+        name: formatFullNameTitle(selectedStudent.name),
+        status: currentSelection.status,
+        points: currentSelection.points,
+      }
+    : null;
   const presentCount = students.filter((student) => student.present).length;
 
   const topScorers = useMemo(
@@ -282,21 +360,24 @@ export default function ClassPageStudent() {
   const activityFeed = useMemo(() => {
     const pointItems = activity.map((row) => {
       const student = Array.isArray(row.students) ? row.students[0] : row.students;
+      const name = formatFullNameTitle(student?.name || "Student");
 
       return {
         id: `points-${row.id}`,
         createdAt: row.created_at,
-        message: `${formatStudentShort(student?.name || "Student")} earned ${
-          row.points
-        } pt${row.points === 1 ? "" : "s"}`,
+        message: `Teacher awarded ${row.points} point${
+          row.points === 1 ? "" : "s"
+        } to ${name}.`,
       };
     });
 
-    const sessionItems = sessionEvents.map((row) => ({
-      id: `session-${row.id}`,
-      createdAt: row.created_at,
-      message: row.message,
-    }));
+    const sessionItems = sessionEvents
+      .map((row) => ({
+        id: `session-${row.id}`,
+        createdAt: row.created_at,
+        message: cleanSessionMessage(row.message),
+      }))
+      .filter((row) => row.message && !/^Teacher awarded \d+ point/i.test(row.message));
 
     return [...pointItems, ...sessionItems].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -500,11 +581,22 @@ export default function ClassPageStudent() {
           filter: `class_id=eq.${classId}`,
         },
         (payload) => {
+          const selectionStudent = students.find(
+            (student) => student.id === payload.new?.student_id
+          );
+          const selectionName = selectionStudent
+            ? formatFullNameTitle(selectionStudent.name)
+            : "A student";
+
           if (
             payload.eventType === "INSERT" &&
             payload.new?.student_id === membership?.student_id
           ) {
             playResultSound();
+            showSessionAlert("You were picked!");
+          } else if (payload.eventType === "INSERT") {
+            showSessionAlert(`${selectionName} was picked.`);
+            playNotificationSound();
           } else if (
             payload.eventType === "UPDATE" &&
             payload.new?.student_id === membership?.student_id
@@ -516,6 +608,12 @@ export default function ClassPageStudent() {
             } else {
               playNotificationSound();
             }
+          }
+          if (
+            payload.new &&
+            ["pending", "accepted", "skip_requested"].includes(payload.new.status)
+          ) {
+            setCurrentSelection(payload.new);
           }
           refreshParticipationState();
         }
@@ -529,8 +627,9 @@ export default function ClassPageStudent() {
           filter: `class_id=eq.${classId}`,
         },
         (payload) => {
-          if (payload.new?.message) {
-            showSessionAlert(payload.new.message);
+          const cleanMessage = cleanSessionMessage(payload.new?.message);
+          if (cleanMessage) {
+            showSessionAlert(cleanMessage);
           }
           refreshSessionEvents();
         }
@@ -555,6 +654,7 @@ export default function ClassPageStudent() {
     refreshSessionEvents,
     showSessionAlert,
     status,
+    students,
   ]);
 
   useEffect(() => {
@@ -641,6 +741,28 @@ export default function ClassPageStudent() {
     setVolunteerQueue((prev) => [...prev, mapQueueRow(data)]);
     setVolunteerAttempts((prev) => prev + 1);
     setSessionMessage("You joined the volunteer queue.");
+    const volunteerMessage = `${formatFullNameTitle(studentName)} volunteered.`;
+    setSessionEvents((prev) => [
+      {
+        id: `local-volunteer-${data.id}`,
+        message: volunteerMessage,
+        created_at: data.created_at,
+      },
+      ...prev,
+    ]);
+    supabase
+      .from("class_session_logs")
+      .insert({
+        class_id: classId,
+        teacher_id: classData?.teacher_id,
+        session_started_at: classData?.session_started_at,
+        message: volunteerMessage,
+      })
+      .then(({ error: logError }) => {
+        if (logError) {
+          console.warn("Could not save volunteer log:", logError);
+        }
+      });
     playNotificationSound();
   };
 
@@ -838,6 +960,31 @@ export default function ClassPageStudent() {
           </div>
         )}
 
+        {!status && selectionFeedback && (
+          <section
+            className={`student-picked-banner ${
+              selectionFeedback.isSelf ? "is-self" : ""
+            }`}
+            role="status"
+          >
+            <p className="student-class-kicker">Spinner result</p>
+            <h2>
+              {selectionFeedback.isSelf
+                ? "You were picked!"
+                : `${selectionFeedback.name} was picked.`}
+            </h2>
+            <span>
+              {selectionFeedback.status === "accepted"
+                ? "Accepted. Waiting for teacher to award points."
+                : selectionFeedback.status === "skip_requested"
+                  ? "Skip requested."
+                  : `${selectionFeedback.points} point${
+                      selectionFeedback.points === 1 ? "" : "s"
+                    } offered.`}
+            </span>
+          </section>
+        )}
+
         {status ? (
           <section className="student-session-card student-class-status-card">
             <h2>{status}</h2>
@@ -889,12 +1036,7 @@ export default function ClassPageStudent() {
                       activityFeed.map((row) => (
                         <article key={row.id}>
                           <strong>{row.message}</strong>
-                          <span>
-                            {new Date(row.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
+                          <span>{formatLocalActivityTime(row.createdAt)}</span>
                         </article>
                       ))
                     )}

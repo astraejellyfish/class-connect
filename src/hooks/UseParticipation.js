@@ -17,7 +17,6 @@ export function useTeacherParticipationActions({
   pendingPick,
   awardPointsInput,
   teacherSettings,
-  sessionSelectedStudentIds,
   volunteerQueue,
   savingVolunteer,
   addLog,
@@ -28,7 +27,6 @@ export function useTeacherParticipationActions({
   setSpinning,
   setSpinRotation,
   setSelectedStudent,
-  setSessionSelectedStudentIds,
   setSelectionRequestUnavailable,
   setSavingVolunteer,
   setVolunteerQueue,
@@ -65,18 +63,10 @@ export function useTeacherParticipationActions({
           )
         );
         playAcceptSound();
-        addLog(
-          `${short} ( ${fullName} ) is selected for ${pts} pt${
-            pts === 1 ? "" : "s"
-          } - accepted`
-        );
+        addLog(`Teacher awarded ${pts} point${pts === 1 ? "" : "s"} to ${fullName}.`);
         setPickOutcome({ kind: "Yes", pts });
       } else {
-        addLog(
-          `${short} ( ${fullName} ) is selected - ${
-            resolutionStatus === "expired" ? "expired" : "skip requested"
-          } (0 pts; offered ${pts}).`
-        );
+        addLog(`${fullName} requested to skip.`);
         setPickOutcome({ kind: "No", offered: pts });
         playSkipSound();
       }
@@ -110,9 +100,7 @@ export function useTeacherParticipationActions({
   const spinStudent = useCallback(() => {
     const maxWheelSegments = 40;
     const wheelStudents = students.slice(0, maxWheelSegments);
-    const presentStudents = wheelStudents.filter(
-      (s) => s.present && !sessionSelectedStudentIds.has(s.id)
-    );
+    const presentStudents = wheelStudents.filter((s) => s.present);
     if (presentStudents.length === 0 || spinning || pendingPick) return;
 
     const parsed = parseInt(String(awardPointsInput).trim(), 10);
@@ -159,7 +147,6 @@ export function useTeacherParticipationActions({
 
     setTimeout(async () => {
       setSelectedStudent(chosen);
-      setSessionSelectedStudentIds((prev) => new Set(prev).add(chosen.id));
       setSpinning(false);
       const { data, error } = await createSelectionRequest({
         classId,
@@ -175,9 +162,7 @@ export function useTeacherParticipationActions({
           pts,
           responseStatus: "teacher_confirmation",
         });
-        addLog(
-          `${formatStudentShort(chosen.name)} selected. Selection request table is unavailable, use teacher confirmation.`
-        );
+        addLog(`${formatFullNameTitle(chosen.name)} was selected.`);
         playResultSound();
         return;
       }
@@ -190,7 +175,7 @@ export function useTeacherParticipationActions({
         responseStatus: data.status,
         expiresAt: data.expires_at,
       });
-      addLog(`${formatStudentShort(chosen.name)} selected. Waiting for student response.`);
+      addLog(`${formatFullNameTitle(chosen.name)} was selected.`);
       playResultSound();
     }, 1200);
   }, [
@@ -199,12 +184,10 @@ export function useTeacherParticipationActions({
     classId,
     pendingPick,
     playResultSound,
-    sessionSelectedStudentIds,
     setPendingPick,
     setPickOutcome,
     setSelectedStudent,
     setSelectionRequestUnavailable,
-    setSessionSelectedStudentIds,
     setSpinRotation,
     setSpinning,
     spinning,
@@ -255,11 +238,7 @@ export function useTeacherParticipationActions({
         volunteer.queueId ? item.queueId !== volunteer.queueId : item.id !== volunteer.id
       )
     );
-    addLog(
-      `${short} ( ${fullName} ) accepted as volunteer for ${pts} pt${
-        pts === 1 ? "" : "s"
-      }.`
-    );
+    addLog(`Teacher awarded ${pts} point${pts === 1 ? "" : "s"} to ${fullName}.`);
     playAcceptSound();
   }, [
     addLog,
@@ -299,7 +278,7 @@ export function useTeacherParticipationActions({
           volunteer.queueId ? item.queueId !== volunteer.queueId : item.id !== volunteer.id
         )
       );
-      addLog(`${formatStudentShort(volunteer.name)} skipped in volunteer queue.`);
+      addLog(`${formatFullNameTitle(volunteer.name)} was skipped in the volunteer queue.`);
       playSkipSound();
     }
 

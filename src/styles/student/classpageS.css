@@ -47,6 +47,35 @@
   margin-top: -6px;
 }
 
+.student-picked-banner {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 2px solid var(--dark);
+  border-radius: 16px;
+  background: #fff7d7;
+  color: var(--dark);
+  box-shadow: 5px 5px 0 var(--shadow);
+}
+
+.student-picked-banner.is-self {
+  background: #dcefd8;
+}
+
+.student-picked-banner h2 {
+  margin: 0;
+  color: var(--green);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.student-picked-banner span {
+  color: var(--muted);
+  font-family: "Roboto Mono", monospace;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .student-class-title-row {
   display: flex;
   align-items: center;
