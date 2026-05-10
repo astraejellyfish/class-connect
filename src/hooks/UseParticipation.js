@@ -154,12 +154,6 @@ export function useTeacherParticipationActions({
         points: pts,
       });
 
-      const selectionMessage = `${formatFullNameTitle(chosen.name)} was selected.`;
-      await supabase.from("class_session_logs").insert({
-        class_id: classId,
-        message: selectionMessage,
-      });
-
       if (error) {
         console.warn("Selection request table is unavailable:", error);
         setSelectionRequestUnavailable(true);
@@ -168,7 +162,7 @@ export function useTeacherParticipationActions({
           pts,
           responseStatus: "teacher_confirmation",
         });
-        addLog(selectionMessage);
+        addLog(`${formatFullNameTitle(chosen.name)} was selected.`);
         playResultSound();
         return;
       }
@@ -181,7 +175,7 @@ export function useTeacherParticipationActions({
         responseStatus: data.status,
         expiresAt: data.expires_at,
       });
-      addLog(selectionMessage);
+      addLog(`${formatFullNameTitle(chosen.name)} was selected.`);
       playResultSound();
     }, 1200);
   }, [

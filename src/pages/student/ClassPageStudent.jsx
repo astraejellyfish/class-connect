@@ -440,7 +440,7 @@ export default function ClassPageStudent() {
 
     const timeoutId = window.setTimeout(() => {
       setStudentSpinnerSpinning(false);
-    }, 1300);
+    }, 1500);
 
     return () => window.clearTimeout(timeoutId);
   }, [currentSelection?.id, currentSelection?.student_id, students]);
@@ -586,14 +586,21 @@ export default function ClassPageStudent() {
       setJoinedSession(false);
       setPendingSelection(null);
       setCurrentSelection(null);
+      // Reset so the spinner will animate for the first pick of the next session.
+      previousSelectionIdRef.current = null;
     }
   }, [classId]);
 
-  const refreshLiveSessionState = useCallback(() => {
+  const refreshLiveSessionStateRef = useRef(null);
+  refreshLiveSessionStateRef.current = () => {
     refreshClassStatus();
     refreshParticipationState();
     refreshSessionEvents();
-  }, [refreshClassStatus, refreshParticipationState, refreshSessionEvents]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refreshLiveSessionState = useCallback(() => {
+    refreshLiveSessionStateRef.current?.();
+  }, []);
 
   useEffect(() => {
     if (!classLoaded || status) return undefined;
@@ -781,6 +788,8 @@ export default function ClassPageStudent() {
             setJoinedSession(false);
             setPendingSelection(null);
             setCurrentSelection(null);
+            // Reset so the spinner fires for the first pick of the next session.
+            previousSelectionIdRef.current = null;
           }
           showSessionAlert(
             payload.new?.session_active ? "Session started." : "Session ended."
@@ -937,9 +946,24 @@ export default function ClassPageStudent() {
         }
         notificationPanel={
           <div className="student-notification-panel">
-            <p className="student-notification-empty">
-              Session alerts appear on this class page as they happen.
-            </p>
+            {sessionEvents.length === 0 ? (
+              <p className="student-notification-empty">
+                Session alerts appear on this class page as they happen.
+              </p>
+            ) : (
+              sessionEvents.slice(0, 10).map((row) => {
+                const clean = cleanSessionMessage(row.message);
+                if (!clean) return null;
+                return (
+                  <div key={row.id} className="notification-item">
+                    <span className="notification-time">
+                      {formatLocalActivityTime(row.created_at)}
+                    </span>
+                    <span className="notification-message">{clean}</span>
+                  </div>
+                );
+              })
+            )}
           </div>
         }
       />

@@ -1214,19 +1214,20 @@ function ClassPage() {
     );
   }, [classId]);
 
-  const refreshLiveSessionState = useCallback(() => {
+  // Use a ref so refreshLiveSessionState has a stable identity,
+  // preventing the 2-second polling useEffect from resetting on every render.
+  const refreshLiveSessionStateRef = useRef(null);
+  refreshLiveSessionStateRef.current = () => {
     refreshRosterState();
     refreshVolunteerQueue();
     refreshJoinRequests();
     refreshSelectionRequest();
     refreshSessionLogs();
-  }, [
-    refreshRosterState,
-    refreshVolunteerQueue,
-    refreshJoinRequests,
-    refreshSelectionRequest,
-    refreshSessionLogs,
-  ]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refreshLiveSessionState = useCallback(() => {
+    refreshLiveSessionStateRef.current?.();
+  }, []);
 
   useEffect(() => {
     if (loading || loadError || !classId) return undefined;
@@ -1511,9 +1512,18 @@ function ClassPage() {
         profileContent={teacherName.charAt(0).toUpperCase()}
         notificationPanel={
           <div className="notification-panel">
-            <p className="notification-empty">
-              Session alerts appear on this class page as they happen.
-            </p>
+            {logs.length === 0 ? (
+              <p className="notification-empty">
+                Session alerts appear on this class page as they happen.
+              </p>
+            ) : (
+              logs.slice(0, 10).map((log) => (
+                <div key={log.id} className="notification-item">
+                  <span className="notification-time">{log.time}</span>
+                  <span className="notification-message">{log.message}</span>
+                </div>
+              ))
+            )}
           </div>
         }
       />
