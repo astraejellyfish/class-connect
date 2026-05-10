@@ -147,12 +147,15 @@ export default function ClassPageStudent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSelection, setPendingSelection] = useState(null);
   const [currentSelection, setCurrentSelection] = useState(null);
+  const [studentSpinnerSpinning, setStudentSpinnerSpinning] = useState(false);
+  const [studentSpinRotation, setStudentSpinRotation] = useState(0);
   const [selectionMessage, setSelectionMessage] = useState("");
   const [respondingSelection, setRespondingSelection] = useState(false);
   const [studentListOpen, setStudentListOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const previousPendingSelectionIdRef = useRef(null);
+  const previousSelectionIdRef = useRef(null);
   const sessionAlertTimeoutRef = useRef(null);
   const activityListRef = useRef(null);
   const studentsRef = useRef([]);
@@ -407,6 +410,40 @@ export default function ClassPageStudent() {
       playResultSound();
     }
   }, [pendingSelection?.id, playResultSound]);
+
+  useEffect(() => {
+    if (!currentSelection?.id || students.length === 0) return undefined;
+    if (previousSelectionIdRef.current === currentSelection.id) return undefined;
+
+    previousSelectionIdRef.current = currentSelection.id;
+
+    const maxWheelSegments = 40;
+    const wheelStudents = students.slice(0, maxWheelSegments);
+    const chosenIndex = wheelStudents.findIndex(
+      (student) => student.id === currentSelection.student_id
+    );
+
+    if (chosenIndex < 0) return undefined;
+
+    const segment = 360 / (wheelStudents.length || 1);
+    const chosenCenterAngle = chosenIndex * segment + segment / 2;
+    const targetModulo = (360 - chosenCenterAngle) % 360;
+
+    setStudentSpinnerSpinning(true);
+    requestAnimationFrame(() => {
+      setStudentSpinRotation((prev) => {
+        const currentModulo = ((prev % 360) + 360) % 360;
+        const delta = (targetModulo - currentModulo + 360) % 360;
+        return prev + 1440 + delta;
+      });
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      setStudentSpinnerSpinning(false);
+    }, 1300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [currentSelection?.id, currentSelection?.student_id, students]);
 
   const handleJoinSession = async () => {
     if (!canJoinSession) {
@@ -1055,6 +1092,8 @@ export default function ClassPageStudent() {
                   selectedStudent={selectedStudent}
                   sessionOngoing={sessionOngoing}
                   currentSelection={currentSelection}
+                  spinning={studentSpinnerSpinning}
+                  spinRotation={studentSpinRotation}
                   pendingSelection={pendingSelection}
                   respondingSelection={respondingSelection}
                   selectionMessage={selectionMessage}

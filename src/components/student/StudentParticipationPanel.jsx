@@ -6,6 +6,8 @@ function StudentParticipationPanel({
   selectedStudent = null,
   sessionOngoing = false,
   currentSelection = null,
+  spinning = false,
+  spinRotation = 0,
   pendingSelection = null,
   respondingSelection = false,
   selectionMessage = "",
@@ -43,7 +45,7 @@ function StudentParticipationPanel({
           <ParticipationSpinner
             students={students}
             selectedStudent={selectedStudent}
-            spinning={false}
+            spinning={spinning}
             pendingPick={
               currentSelection
                 ? {
@@ -53,7 +55,7 @@ function StudentParticipationPanel({
                 : null
             }
             pickOutcome={null}
-            spinRotation={0}
+            spinRotation={spinRotation}
           />
         )}
       </div>
