@@ -47,14 +47,31 @@ function StudentParticipationPanel({
             selectedStudent={selectedStudent}
             spinning={spinning}
             pendingPick={
-              currentSelection
+              // Only show a pendingPick while the selection is still active
+              // (pending / accepted / skip_requested). Guard against null
+              // selectedStudent so we don't pass a broken object.
+              currentSelection &&
+              selectedStudent &&
+              ["pending", "accepted", "skip_requested"].includes(
+                currentSelection.status
+              )
                 ? {
                     student: selectedStudent,
                     pts: currentSelection.points,
+                    // responseStatus drives the status-bar kicker text in the spinner
+                    responseStatus: currentSelection.status,
                   }
                 : null
             }
-            pickOutcome={null}
+            pickOutcome={
+              // Surface the resolved outcome so students see "Points awarded" /
+              // "No points awarded" after the teacher resolves the pick.
+              currentSelection?.status === "awarded"
+                ? { kind: "Yes", pts: currentSelection.points }
+                : currentSelection?.status === "skipped"
+                  ? { kind: "No", offered: currentSelection.points }
+                  : null
+            }
             spinRotation={spinRotation}
           />
         )}

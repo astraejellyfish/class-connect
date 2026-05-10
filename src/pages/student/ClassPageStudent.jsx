@@ -252,7 +252,7 @@ export default function ClassPageStudent() {
           .from("participation_selection_requests")
           .select("id, class_id, student_id, points, status, created_at, expires_at")
           .eq("class_id", classId)
-          .in("status", ["pending", "accepted", "skip_requested"])
+          .in("status", ["pending", "accepted", "skip_requested", "awarded", "skipped"])
           .order("created_at", { ascending: false })
           .limit(1),
       ]);
@@ -413,9 +413,6 @@ export default function ClassPageStudent() {
 
   useEffect(() => {
     if (!currentSelection?.id || students.length === 0) return undefined;
-    if (previousSelectionIdRef.current === currentSelection.id) return undefined;
-
-    previousSelectionIdRef.current = currentSelection.id;
 
     const maxWheelSegments = 40;
     const wheelStudents = students.slice(0, maxWheelSegments);
@@ -423,7 +420,15 @@ export default function ClassPageStudent() {
       (student) => student.id === currentSelection.student_id
     );
 
+    // If the selected student isn't in the roster yet, wait for the next
+    // students update — don't mark the ref as handled.
     if (chosenIndex < 0) return undefined;
+
+    // Already animated this selection — but if we haven't animated yet
+    // (ref is still null or holds a stale id) we must proceed.
+    if (previousSelectionIdRef.current === currentSelection.id) return undefined;
+
+    previousSelectionIdRef.current = currentSelection.id;
 
     const segment = 360 / (wheelStudents.length || 1);
     const chosenCenterAngle = chosenIndex * segment + segment / 2;
@@ -516,7 +521,9 @@ export default function ClassPageStudent() {
           .from("participation_selection_requests")
           .select("id, class_id, student_id, points, status, created_at, expires_at")
           .eq("class_id", classId)
-          .in("status", ["pending", "accepted", "skip_requested"])
+          // Include awarded/skipped so the student sees the resolved outcome
+          // ("Points awarded" / "No points awarded") after the teacher acts.
+          .in("status", ["pending", "accepted", "skip_requested", "awarded", "skipped"])
           .order("created_at", { ascending: false })
           .limit(1),
       ]);
@@ -707,13 +714,23 @@ export default function ClassPageStudent() {
               playAcceptSound();
             } else if (payload.new?.status === "skip_requested") {
               playSkipSound();
+            } else if (payload.new?.status === "awarded") {
+              playAcceptSound();
+              showSessionAlert(`+${payload.new.points} pt${payload.new.points === 1 ? "" : "s"} awarded!`);
+            } else if (payload.new?.status === "skipped") {
+              playSkipSound();
+              showSessionAlert("Selection skipped.");
             } else {
               playNotificationSound();
             }
           }
+          // Keep currentSelection updated for all relevant statuses,
+          // including resolved ones so the outcome is visible to the student.
           if (
             payload.new &&
-            ["pending", "accepted", "skip_requested"].includes(payload.new.status)
+            ["pending", "accepted", "skip_requested", "awarded", "skipped"].includes(
+              payload.new.status
+            )
           ) {
             setCurrentSelection(payload.new);
           }
