@@ -1139,19 +1139,20 @@
   .student-class-dashboard {
     display: flex;
     flex-direction: column;
-    position: relative;
-    inset: auto;
+    position: fixed;
+    inset: 0;
     width: 100%;
     max-width: 100%;
-    height: auto;
-    min-height: 100dvh;
+    height: 100svh;
+    height: 100dvh;
     min-height: 100svh;
-    overflow: visible;
+    min-height: 100dvh;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding: 14px;
     padding-top: 70px;
+    padding-bottom: 112px;
     gap: 14px;
   }
 
@@ -1206,6 +1207,12 @@
     overflow: visible;
     overflow-x: hidden;
     padding-right: 0;
+  }
+
+  .student-class-session-grid,
+  .student-class-primary-stack,
+  .student-side-stack {
+    overflow: visible;
   }
 
   .student-session-head {
@@ -1281,6 +1288,7 @@
   .student-class-dashboard {
     padding: 10px;
     padding-top: 62px;
+    padding-bottom: 104px;
     gap: 12px;
   }
 

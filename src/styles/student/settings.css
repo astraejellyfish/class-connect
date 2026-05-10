@@ -394,15 +394,17 @@
   .student-dashboard--settings {
     display: flex;
     flex-direction: column;
-    position: relative;
+    position: fixed;
+    inset: 0;
     width: 100%;
     max-width: 100%;
-    height: auto;
-    min-height: 100dvh;
+    height: 100svh;
+    height: 100dvh;
     min-height: 100svh;
+    min-height: 100dvh;
     padding: 16px;
     padding-top: 70px;
-    overflow: visible;
+    padding-bottom: 112px;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -545,6 +547,7 @@
   .student-dashboard--settings {
     padding: 10px;
     padding-top: 62px;
+    padding-bottom: 104px;
   }
 
   .student-dashboard--settings::before {

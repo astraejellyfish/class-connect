@@ -30,6 +30,11 @@ import {
 
 const PICK_RESPONSE_SECONDS = 10;
 const ENDED_SESSION_LOG_RETENTION_MS = 2 * 60 * 60 * 1000;
+const AI_LOG_PATTERNS = [/^AI summary/i, /^Ask AI/i];
+
+function isAiToolLog(message) {
+  return AI_LOG_PATTERNS.some((pattern) => pattern.test(String(message || "")));
+}
 
 function getLastNameSortKey(name) {
   const parts = String(name || "")
@@ -501,6 +506,7 @@ function ClassPage() {
                 minute: "2-digit",
               }),
               message: row.message,
+              isAiTool: isAiToolLog(row.message),
               createdAt: row.created_at,
             }))
       );
@@ -572,13 +578,11 @@ function ClassPage() {
       setAiSummary(buildLocalAiSummary(classData, logs, students, volunteerQueue));
       setShowSummaryModal(true);
       setAiSummaryError(`AI service unavailable: ${details}. Showing a local summary.`);
-      addLog("AI summary generation failed.");
       return;
     }
 
     setAiSummary(normalizeAiSummaryResponse(data?.summary));
     setShowSummaryModal(true);
-    addLog("AI summary generated.");
   };
 
   const confirmStudentEntry = async (student) => {
@@ -851,12 +855,10 @@ function ClassPage() {
 
       setAskAiAnswer("");
       setAskAiError(`AI service unavailable: ${details}`);
-      addLog("Ask AI request failed.");
       return;
     }
 
     setAskAiAnswer(data?.answer || "No answer generated.");
-    addLog("Ask AI answered a teacher prompt.");
   };
 
   const presentCount = useMemo(

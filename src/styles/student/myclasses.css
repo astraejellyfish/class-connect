@@ -676,17 +676,17 @@
   }
 
   .student-myclasses-dashboard {
-    position: relative;
-    inset: auto;
+    position: fixed;
+    inset: 0;
     display: grid;
     grid-template-columns: 1fr;
     width: 100%;
     max-width: 100%;
-    height: auto;
-    min-height: 100dvh;
+    height: 100svh;
+    height: 100dvh;
     min-height: 100svh;
+    min-height: 100dvh;
     padding: 12px;
-    overflow: visible;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;

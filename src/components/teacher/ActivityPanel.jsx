@@ -2,6 +2,8 @@ function ActivityPanel({
   logs,
   sessionSlot = null,
 }) {
+  const activityLogs = logs.filter((log) => !log.isAiTool);
+
   return (
     <aside className="activity-panel">
       {sessionSlot ? (
@@ -10,14 +12,14 @@ function ActivityPanel({
 
       <div className="activity-head">
         <h3>Activity Log</h3>
-        <span>{logs.length}</span>
+        <span>{activityLogs.length}</span>
       </div>
 
       <div className="activity-list">
-        {logs.length === 0 ? (
+        {activityLogs.length === 0 ? (
           <p className="empty-log">No activity yet.</p>
         ) : (
-          logs.map((log, index) => (
+          activityLogs.map((log, index) => (
             <div className="activity-item" key={index}>
               <strong>{log.time}</strong>
               <p>{log.message}</p>

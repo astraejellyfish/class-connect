@@ -776,9 +776,7 @@ export default function ClassPageStudent() {
                               {row.points} pt{row.points === 1 ? "" : "s"}
                             </strong>
                             <span>
-                              {new Date(row.created_at).toLocaleString([], {
-                                month: "short",
-                                day: "numeric",
+                              {new Date(row.created_at).toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}
