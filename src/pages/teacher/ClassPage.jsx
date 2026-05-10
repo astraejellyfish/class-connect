@@ -245,6 +245,7 @@ function ClassPage() {
     () => new Set()
   );
   const sessionAlertTimeoutRef = useRef(null);
+  const studentsRef = useRef([]);
   const {
     skipFxActive,
     playNotificationSound,
@@ -268,6 +269,10 @@ function ClassPage() {
   useEffect(() => {
     return () => window.clearTimeout(sessionAlertTimeoutRef.current);
   }, []);
+
+  useEffect(() => {
+    studentsRef.current = students;
+  }, [students]);
 
   const addLog = useCallback((message, options = {}) => {
     const time = new Date().toLocaleTimeString([], {
@@ -1093,13 +1098,13 @@ function ClassPage() {
       return;
     }
 
-    const studentsById = students.reduce((acc, student) => {
+    const studentsById = studentsRef.current.reduce((acc, student) => {
       acc[student.id] = student;
       return acc;
     }, {});
 
     setVolunteerQueue((data || []).map((row) => mapVolunteerRow(row, studentsById)));
-  }, [classId, students]);
+  }, [classId]);
 
   const refreshJoinRequests = useCallback(async () => {
     const { data, error } = await supabase
@@ -1162,7 +1167,7 @@ function ClassPage() {
     const request = data?.[0];
     if (!request) return;
 
-    const student = students.find((item) => item.id === request.student_id);
+    const student = studentsRef.current.find((item) => item.id === request.student_id);
     if (!student) return;
 
     if (request.status === "accepted") {
@@ -1207,7 +1212,21 @@ function ClassPage() {
             expiresAt: request.expires_at,
           }
     );
-  }, [classId, students]);
+  }, [classId]);
+
+  const refreshLiveSessionState = useCallback(() => {
+    refreshRosterState();
+    refreshVolunteerQueue();
+    refreshJoinRequests();
+    refreshSelectionRequest();
+    refreshSessionLogs();
+  }, [
+    refreshRosterState,
+    refreshVolunteerQueue,
+    refreshJoinRequests,
+    refreshSelectionRequest,
+    refreshSessionLogs,
+  ]);
 
   useEffect(() => {
     if (loading || loadError || !classId) return undefined;
@@ -1243,6 +1262,7 @@ function ClassPage() {
             setPendingPick(null);
             setPickOutcome(null);
           }
+          refreshLiveSessionState();
         }
       )
       .subscribe();
@@ -1255,12 +1275,22 @@ function ClassPage() {
     loading,
     loadError,
     pauseSessionMusic,
+    refreshLiveSessionState,
     restartSessionMusic,
     setPendingPick,
     setPickOutcome,
     setSelectedStudent,
     showSessionAlert,
   ]);
+
+  useEffect(() => {
+    if (loading || loadError || !classId) return undefined;
+
+    refreshLiveSessionState();
+    const intervalId = window.setInterval(refreshLiveSessionState, 2000);
+
+    return () => window.clearInterval(intervalId);
+  }, [classId, loading, loadError, refreshLiveSessionState]);
 
   useEffect(() => {
     if (loading || loadError || !classId) return undefined;
@@ -1336,10 +1366,7 @@ function ClassPage() {
       )
       .subscribe();
 
-    const intervalId = window.setInterval(refreshVolunteerQueue, 3000);
-
     return () => {
-      window.clearInterval(intervalId);
       supabase.removeChannel(channel);
     };
   }, [
@@ -1400,6 +1427,30 @@ function ClassPage() {
           filter: `class_id=eq.${classId}`,
         },
         (payload) => {
+          const request = payload.new;
+          const student = studentsRef.current.find(
+            (item) => item.id === request?.student_id
+          );
+
+          if (request && student) {
+            setSelectedStudent(student);
+            setPendingPick((current) =>
+              current?.requestId === request.id
+                ? {
+                    ...current,
+                    responseStatus: request.status,
+                    expiresAt: request.expires_at,
+                  }
+                : {
+                    student,
+                    pts: request.points,
+                    requestId: request.id,
+                    responseStatus: request.status,
+                    expiresAt: request.expires_at,
+                  }
+            );
+          }
+
           if (payload.eventType === "INSERT") {
             showSessionAlert("Student selected.");
           }
@@ -1419,10 +1470,7 @@ function ClassPage() {
       )
       .subscribe();
 
-    const intervalId = window.setInterval(refreshSelectionRequest, 1500);
-
     return () => {
-      window.clearInterval(intervalId);
       supabase.removeChannel(channel);
     };
   }, [

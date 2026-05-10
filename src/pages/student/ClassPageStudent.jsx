@@ -155,6 +155,8 @@ export default function ClassPageStudent() {
   const previousPendingSelectionIdRef = useRef(null);
   const sessionAlertTimeoutRef = useRef(null);
   const activityListRef = useRef(null);
+  const studentsRef = useRef([]);
+  const classLoaded = Boolean(classData);
   const sessionOngoing = Boolean(classData?.session_active);
   const {
     playNotificationSound,
@@ -176,6 +178,10 @@ export default function ClassPageStudent() {
   useEffect(() => {
     return () => window.clearTimeout(sessionAlertTimeoutRef.current);
   }, []);
+
+  useEffect(() => {
+    studentsRef.current = students;
+  }, [students]);
 
   useEffect(() => {
     async function loadClass() {
@@ -509,8 +515,60 @@ export default function ClassPageStudent() {
     setSessionEvents(data || []);
   }, [classId]);
 
+  const refreshClassStatus = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("classes")
+      .select("id, class_name, subject_code, class_code, program, teacher_id, session_active, session_started_at")
+      .eq("id", classId)
+      .maybeSingle();
+
+    if (error || !data) {
+      if (error) console.warn("Could not refresh class status:", error);
+      return;
+    }
+
+    setClassData((prev) => {
+      const nextClass = {
+        ...data,
+        teacher: prev?.teacher || null,
+      };
+      return nextClass;
+    });
+    setMembership((prev) =>
+      prev
+        ? {
+            ...prev,
+            classes: {
+              ...data,
+              teacher: prev.classes?.teacher || null,
+            },
+          }
+        : prev
+    );
+    if (!data.session_active) {
+      setJoinedSession(false);
+      setPendingSelection(null);
+      setCurrentSelection(null);
+    }
+  }, [classId]);
+
+  const refreshLiveSessionState = useCallback(() => {
+    refreshClassStatus();
+    refreshParticipationState();
+    refreshSessionEvents();
+  }, [refreshClassStatus, refreshParticipationState, refreshSessionEvents]);
+
   useEffect(() => {
-    if (!classData || status) return undefined;
+    if (!classLoaded || status) return undefined;
+
+    refreshLiveSessionState();
+    const intervalId = window.setInterval(refreshLiveSessionState, 2000);
+
+    return () => window.clearInterval(intervalId);
+  }, [classLoaded, status, refreshLiveSessionState]);
+
+  useEffect(() => {
+    if (!classLoaded || status) return undefined;
 
     const participationChannel = supabase
       .channel(`student-participation-${classId}`)
@@ -581,7 +639,7 @@ export default function ClassPageStudent() {
           filter: `class_id=eq.${classId}`,
         },
         (payload) => {
-          const selectionStudent = students.find(
+          const selectionStudent = studentsRef.current.find(
             (student) => student.id === payload.new?.student_id
           );
           const selectionName = selectionStudent
@@ -636,14 +694,11 @@ export default function ClassPageStudent() {
       )
       .subscribe();
 
-    const intervalId = window.setInterval(refreshParticipationState, 3000);
-
     return () => {
-      window.clearInterval(intervalId);
       supabase.removeChannel(participationChannel);
     };
   }, [
-    classData,
+    classLoaded,
     classId,
     membership?.student_id,
     playNotificationSound,
@@ -654,11 +709,10 @@ export default function ClassPageStudent() {
     refreshSessionEvents,
     showSessionAlert,
     status,
-    students,
   ]);
 
   useEffect(() => {
-    if (!classData || status || !classId) return undefined;
+    if (!classLoaded || status || !classId) return undefined;
 
     const channel = supabase
       .channel(`student-class-status-${classId}`)
@@ -671,16 +725,18 @@ export default function ClassPageStudent() {
           filter: `id=eq.${classId}`,
         },
         (payload) => {
-          const nextClass = {
+          setClassData((prev) => ({
             ...payload.new,
-            teacher: classData.teacher || null,
-          };
-          setClassData(nextClass);
+            teacher: prev?.teacher || null,
+          }));
           setMembership((prev) =>
             prev
               ? {
                   ...prev,
-                  classes: nextClass,
+                  classes: {
+                    ...payload.new,
+                    teacher: prev.classes?.teacher || null,
+                  },
                 }
               : prev
           );
@@ -703,7 +759,7 @@ export default function ClassPageStudent() {
       supabase.removeChannel(channel);
     };
   }, [
-    classData,
+    classLoaded,
     classId,
     playNotificationSound,
     refreshParticipationState,
