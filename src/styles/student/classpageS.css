@@ -465,6 +465,49 @@
   text-align: center;
 }
 
+.student-selection-summary {
+  width: min(100%, 340px);
+  padding: 14px;
+  border: 2px solid var(--dark);
+  border-radius: 14px;
+  background: white;
+  box-shadow: 3px 3px 0 var(--shadow);
+  display: grid;
+  gap: 5px;
+}
+
+.student-selection-summary strong {
+  color: var(--dark);
+  font-size: 20px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.student-selection-summary span:last-child {
+  color: var(--green);
+  font-family: "Roboto Mono", monospace;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.student-selection-summary--pending,
+.student-selection-summary--accepted,
+.student-selection-summary--skip_requested {
+  background: #fff7d7;
+}
+
+.student-selection-summary--awarded {
+  background: #eef8eb;
+}
+
+.student-selection-summary--skipped {
+  background: #fff1f1;
+}
+
+.student-selection-summary--skipped span:last-child {
+  color: #9b1c1c;
+}
+
 .student-volunteer-action {
   display: grid;
   justify-items: center;
@@ -707,6 +750,25 @@
   border-radius: 999px;
 }
 
+.student-own-points-card {
+  display: grid;
+  gap: 6px;
+  background: #eef8eb;
+}
+
+.student-own-points-card strong {
+  color: var(--green);
+  font-family: "Roboto Mono", monospace;
+  font-size: 36px;
+  line-height: 1;
+}
+
+.student-own-points-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .student-top-scorers-card {
   display: flex;
   flex-direction: column;
@@ -731,6 +793,18 @@
   border-radius: 12px;
   background: white;
   color: var(--muted);
+}
+
+.student-top-scorers-list li.is-current-student,
+.student-row.is-current-student {
+  border-color: var(--green);
+  background: #eef8eb;
+  box-shadow: 4px 4px 0 rgba(47, 122, 69, 0.22);
+}
+
+.student-top-scorers-list li.is-current-student > span {
+  background: var(--green);
+  color: white;
 }
 
 .student-top-scorers-list li > span {
@@ -860,6 +934,19 @@
 .student-row span {
   font-size: 13px;
   color: var(--muted);
+}
+
+.student-row.is-current-student span:last-child {
+  width: fit-content;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border: 2px solid var(--green);
+  border-radius: 999px;
+  background: white;
+  color: var(--green);
+  font-family: "Roboto Mono", monospace;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .student-full-name {

@@ -31,6 +31,7 @@ import {
 
 const ENDED_SESSION_LOG_RETENTION_MS = 2 * 60 * 60 * 1000;
 const AI_LOG_PATTERNS = [/^AI summary/i, /^Ask AI/i];
+const ACTIVE_SELECTION_STATUSES = ["pending", "accepted", "skip_requested"];
 
 function isAiToolLog(message) {
   return AI_LOG_PATTERNS.some((pattern) => pattern.test(String(message || "")));
@@ -1154,7 +1155,7 @@ function ClassPage() {
       .from("participation_selection_requests")
       .select("id, class_id, student_id, points, status, created_at, expires_at")
       .eq("class_id", classId)
-      .in("status", ["pending", "accepted", "skip_requested"])
+      .in("status", ACTIVE_SELECTION_STATUSES)
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -1165,7 +1166,10 @@ function ClassPage() {
     }
 
     const request = data?.[0];
-    if (!request) return;
+    if (!request) {
+      setPendingPick(null);
+      return;
+    }
 
     const student = studentsRef.current.find((item) => item.id === request.student_id);
     if (!student) return;
@@ -1435,21 +1439,30 @@ function ClassPage() {
 
           if (request && student) {
             setSelectedStudent(student);
-            setPendingPick((current) =>
-              current?.requestId === request.id
-                ? {
-                    ...current,
-                    responseStatus: request.status,
-                    expiresAt: request.expires_at,
-                  }
-                : {
-                    student,
-                    pts: request.points,
-                    requestId: request.id,
-                    responseStatus: request.status,
-                    expiresAt: request.expires_at,
-                  }
-            );
+            if (ACTIVE_SELECTION_STATUSES.includes(request.status)) {
+              setPendingPick((current) =>
+                current?.requestId === request.id
+                  ? {
+                      ...current,
+                      responseStatus: request.status,
+                      expiresAt: request.expires_at,
+                    }
+                  : {
+                      student,
+                      pts: request.points,
+                      requestId: request.id,
+                      responseStatus: request.status,
+                      expiresAt: request.expires_at,
+                    }
+              );
+              setPickOutcome(null);
+            } else if (request.status === "awarded") {
+              setPendingPick(null);
+              setPickOutcome({ kind: "Yes", pts: request.points });
+            } else if (request.status === "skipped") {
+              setPendingPick(null);
+              setPickOutcome({ kind: "No", offered: request.points });
+            }
           }
 
           if (payload.eventType === "UPDATE") {

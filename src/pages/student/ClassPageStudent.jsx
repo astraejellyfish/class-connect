@@ -23,8 +23,6 @@ const MAX_JOIN_REQUEST_ATTEMPTS = 3;
 const PARTICIPATION_SELECTION_SELECT =
   "id, class_id, student_id, points, status, created_at, expires_at, students(id, name, email, student_id)";
 
-const SPINNER_MAX_SEGMENTS = 40;
-
 function getLastNameSortKey(name) {
   const parts = String(name || "")
     .trim()
@@ -190,15 +188,12 @@ export default function ClassPageStudent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSelection, setPendingSelection] = useState(null);
   const [currentSelection, setCurrentSelection] = useState(null);
-  const [studentSpinnerSpinning, setStudentSpinnerSpinning] = useState(false);
-  const [studentSpinRotation, setStudentSpinRotation] = useState(0);
   const [selectionMessage, setSelectionMessage] = useState("");
   const [respondingSelection, setRespondingSelection] = useState(false);
   const [studentListOpen, setStudentListOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const previousPendingSelectionIdRef = useRef(null);
-  const previousSelectionIdRef = useRef(null);
   const sessionAlertTimeoutRef = useRef(null);
   const activityListRef = useRef(null);
   const studentsRef = useRef([]);
@@ -424,15 +419,6 @@ export default function ClassPageStudent() {
     return null;
   }, [currentSelection, students, pointsByStudentIdFromActivity]);
 
-  const spinnerWheelStudents = useMemo(() => {
-    const sid = currentSelection?.student_id;
-    if (!sid || !selectedStudent) return students.slice(0, SPINNER_MAX_SEGMENTS);
-
-    const base = students.slice(0, SPINNER_MAX_SEGMENTS);
-    if (base.some((s) => s.id === sid)) return base;
-    return [selectedStudent, ...base.filter((s) => s.id !== sid)].slice(0, SPINNER_MAX_SEGMENTS);
-  }, [students, currentSelection?.student_id, selectedStudent]);
-
   const presentCount = students.filter((student) => student.present).length;
 
   const topScorers = useMemo(
@@ -441,6 +427,10 @@ export default function ClassPageStudent() {
         .sort((a, b) => (b.points || 0) - (a.points || 0))
         .slice(0, 5),
     [students]
+  );
+  const currentStudent = useMemo(
+    () => students.find((student) => student.id === membership?.student_id) || null,
+    [membership?.student_id, students]
   );
 
   const activityFeed = useMemo(() => {
@@ -488,43 +478,6 @@ export default function ClassPageStudent() {
     }
   }, [pendingSelection?.id, playResultSound]);
 
-  useEffect(() => {
-    if (!currentSelection?.id || students.length === 0) return undefined;
-
-    const wheelStudents = spinnerWheelStudents;
-    const chosenIndex = wheelStudents.findIndex(
-      (student) => student.id === currentSelection.student_id
-    );
-
-    // If the selected student isn't in the roster yet, wait for the next
-    // students update — don't mark the ref as handled.
-    if (chosenIndex < 0) return undefined;
-
-    // Already animated this selection — but if we haven't animated yet
-    // (ref is still null or holds a stale id) we must proceed.
-    if (previousSelectionIdRef.current === currentSelection.id) return undefined;
-
-    previousSelectionIdRef.current = currentSelection.id;
-
-    const segment = 360 / (wheelStudents.length || 1);
-    const chosenCenterAngle = chosenIndex * segment + segment / 2;
-    const targetModulo = (360 - chosenCenterAngle) % 360;
-
-    setStudentSpinnerSpinning(true);
-    requestAnimationFrame(() => {
-      setStudentSpinRotation((prev) => {
-        const currentModulo = ((prev % 360) + 360) % 360;
-        const delta = (targetModulo - currentModulo + 360) % 360;
-        return prev + 1440 + delta;
-      });
-    });
-
-    const timeoutId = window.setTimeout(() => {
-      setStudentSpinnerSpinning(false);
-    }, 1500);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [currentSelection?.id, currentSelection?.student_id, students, spinnerWheelStudents]);
 
   const handleJoinSession = async () => {
     if (!canJoinSession) {
@@ -677,8 +630,6 @@ export default function ClassPageStudent() {
       setJoinedSession(false);
       setPendingSelection(null);
       setCurrentSelection(null);
-      // Reset so the spinner will animate for the first pick of the next session.
-      previousSelectionIdRef.current = null;
     }
   }, [classId]);
 
@@ -885,8 +836,6 @@ export default function ClassPageStudent() {
             setJoinedSession(false);
             setPendingSelection(null);
             setCurrentSelection(null);
-            // Reset so the spinner fires for the first pick of the next session.
-            previousSelectionIdRef.current = null;
           }
           showSessionAlert(
             payload.new?.session_active ? "Session started." : "Session ended."
@@ -1185,12 +1134,9 @@ export default function ClassPageStudent() {
               <div className="student-class-primary-stack">
                 <StudentParticipationPanel
                   students={students}
-                  spinnerStudents={spinnerWheelStudents}
                   selectedStudent={selectedStudent}
                   sessionOngoing={sessionOngoing}
                   currentSelection={currentSelection}
-                  spinning={studentSpinnerSpinning}
-                  spinRotation={studentSpinRotation}
                   pendingSelection={pendingSelection}
                   respondingSelection={respondingSelection}
                   selectionMessage={selectionMessage}
@@ -1208,6 +1154,20 @@ export default function ClassPageStudent() {
               </div>
 
               <aside className="student-side-stack">
+                <section className="student-session-card student-own-points-card">
+                  <span className="student-class-kicker">Your points</span>
+                  <strong>
+                    {studentOwnPoints} pt{studentOwnPoints === 1 ? "" : "s"}
+                  </strong>
+                  <p>
+                    {currentStudent?.present
+                      ? "You are marked present in this session."
+                      : sessionOngoing
+                        ? "Join the live session to be marked present."
+                        : "Points update after your teacher records participation."}
+                  </p>
+                </section>
+
                 <section className="student-session-card student-activity-card">
                   <div className="student-activity-session-slot">
                     <p className="student-class-kicker">Session &amp; invites</p>
@@ -1248,7 +1208,12 @@ export default function ClassPageStudent() {
                       <li>No scores yet.</li>
                     ) : (
                       topScorers.map((student, index) => (
-                        <li key={student.id}>
+                        <li
+                          className={
+                            student.id === membership?.student_id ? "is-current-student" : ""
+                          }
+                          key={student.id}
+                        >
                           <span>{index + 1}</span>
                           <strong>{formatStudentShort(student.name)}</strong>
                           <small>
@@ -1295,7 +1260,12 @@ export default function ClassPageStudent() {
                   </div>
                 ) : (
                   students.map((student) => (
-                    <div className="student-row" key={student.id}>
+                    <div
+                      className={`student-row ${
+                        student.id === membership?.student_id ? "is-current-student" : ""
+                      }`}
+                      key={student.id}
+                    >
                       <div>
                         <strong title={student.name}>{formatStudentShort(student.name)}</strong>
                         <span className="student-full-name">{student.name}</span>

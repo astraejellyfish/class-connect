@@ -23,43 +23,53 @@ export default function LandingPage() {
       </nav>
 
       <section className="hero-section">
-        <div className="hero-content">
-          <div className="institution-block">
-            <img src="/gordon-logo.png" className="institution-logo" alt="Gordon College Logo" />
-          
-            <div className="institution-text">
-              <h2>Gordon College</h2>
-              <p>College of Computer Studies</p>
+        <div className="hero-layout">
+          <div className="hero-content">
+            <div className="institution-block">
+              <img src="/gordon-logo.png" className="institution-logo" alt="Gordon College Logo" />
+            
+              <div className="institution-text">
+                <h2>Gordon College</h2>
+                <p>College of Computer Studies</p>
+              </div>
+            </div>
+            
+            <div className="brand-row">
+              <img
+                src="/leaf-logo.png"
+                className="leaf-logo"
+                alt="Class Connect Logo"
+              />
+              <h1>Class Connect</h1>
+            </div>
+
+            <p className="tagline">LEVEL UP YOUR CLASS</p>
+
+            <p className="hero-description">
+              An equity-based classroom participation system that helps teachers
+              manage recitations, track participation points, and encourage every
+              student to take part in class.
+            </p>
+
+            <div className="hero-buttons">
+              <button className="primary-btn" onClick={() => navigate("/login")}>
+                LOGIN
+              </button>
+              <button
+                className="secondary-btn"
+                onClick={() => navigate("/signup")}
+              >
+                GET STARTED
+              </button>
             </div>
           </div>
-          
-          <div className="brand-row">
+
+          <div className="hero-qr-card" aria-label="Class Connect QR code">
             <img
-              src="/leaf-logo.png"
-              className="leaf-logo"
-              alt="Class Connect Logo"
+              src="/qr-code.png"
+              className="hero-qr-code"
+              alt="Class Connect QR code"
             />
-            <h1>Class Connect</h1>
-          </div>
-
-          <p className="tagline">LEVEL UP YOUR CLASS</p>
-
-          <p className="hero-description">
-            An equity-based classroom participation system that helps teachers
-            manage recitations, track participation points, and encourage every
-            student to take part in class.
-          </p>
-
-          <div className="hero-buttons">
-            <button className="primary-btn" onClick={() => navigate("/login")}>
-              LOGIN
-            </button>
-            <button
-              className="secondary-btn"
-              onClick={() => navigate("/signup")}
-            >
-              GET STARTED
-            </button>
           </div>
         </div>
       </section>

@@ -1,15 +1,10 @@
-import ParticipationSpinner from "./ParticipationSpinner";
 import { formatFullNameTitle } from "../../utils/studentDisplay";
 
 function StudentParticipationPanel({
   students = [],
-  /** Wheel segments (may reorder / include picked student); defaults to students */
-  spinnerStudents = null,
   selectedStudent = null,
   sessionOngoing = false,
   currentSelection = null,
-  spinning = false,
-  spinRotation = 0,
   pendingSelection = null,
   respondingSelection = false,
   selectionMessage = "",
@@ -21,13 +16,58 @@ function StudentParticipationPanel({
   onSelectionResponse,
   onVolunteer,
 }) {
+  const selectionStatus = currentSelection?.status || "";
+  const selectionPoints = currentSelection?.points || 0;
+  const hasSelection = Boolean(currentSelection && selectedStudent);
+  const selectedName = selectedStudent
+    ? formatFullNameTitle(selectedStudent.name)
+    : "No student selected";
+  const resultKind =
+    selectionStatus === "awarded"
+      ? "awarded"
+      : selectionStatus === "skipped"
+        ? "skipped"
+        : selectionStatus === "accepted"
+          ? "accepted"
+          : selectionStatus === "skip_requested"
+            ? "skip_requested"
+            : selectionStatus === "pending"
+              ? "pending"
+              : "";
+  const resultTitle =
+    resultKind === "awarded"
+      ? "Points awarded"
+      : resultKind === "skipped"
+        ? "No points awarded"
+        : resultKind === "accepted"
+          ? "Accepted"
+          : resultKind === "skip_requested"
+            ? "Skip requested"
+            : resultKind === "pending"
+              ? "Selected"
+              : "Selection status";
+  const resultMeta =
+    resultKind === "awarded"
+      ? `+${selectionPoints} pt${selectionPoints === 1 ? "" : "s"}`
+      : resultKind === "skipped"
+        ? `0 pts, offered ${selectionPoints}`
+        : resultKind === "accepted"
+          ? "Waiting for your teacher to finish"
+          : resultKind === "skip_requested"
+            ? "Waiting for your teacher to confirm"
+            : resultKind === "pending"
+              ? `${selectionPoints} pt${selectionPoints === 1 ? "" : "s"} pending`
+              : sessionOngoing
+                ? "Waiting for your teacher's next selection"
+                : "Start a live session to participate";
+
   return (
     <section className="participation-card participation-card-main student-readonly-participation">
       <div className="participation-head participation-head-row">
         <div>
           <h3>Participation</h3>
           <p className="participation-sub">
-            Watch the class spinner and volunteer when you want to participate.
+            Follow your selection status and volunteer when you want to participate.
           </p>
         </div>
         <div className="participation-toolbar">
@@ -44,38 +84,15 @@ function StudentParticipationPanel({
         {students.length === 0 ? (
           <span>No students in this class yet.</span>
         ) : (
-          <ParticipationSpinner
-            students={spinnerStudents ?? students}
-            selectedStudent={selectedStudent}
-            spinning={spinning}
-            pendingPick={
-              // Only show a pendingPick while the selection is still active
-              // (pending / accepted / skip_requested). Guard against null
-              // selectedStudent so we don't pass a broken object.
-              currentSelection &&
-              selectedStudent &&
-              ["pending", "accepted", "skip_requested"].includes(
-                currentSelection.status
-              )
-                ? {
-                    student: selectedStudent,
-                    pts: currentSelection.points,
-                    // responseStatus drives the status-bar kicker text in the spinner
-                    responseStatus: currentSelection.status,
-                  }
-                : null
-            }
-            pickOutcome={
-              // Surface the resolved outcome so students see "Points awarded" /
-              // "No points awarded" after the teacher resolves the pick.
-              currentSelection?.status === "awarded"
-                ? { kind: "Yes", pts: currentSelection.points }
-                : currentSelection?.status === "skipped"
-                  ? { kind: "No", offered: currentSelection.points }
-                  : null
-            }
-            spinRotation={spinRotation}
-          />
+          <div
+            className={`student-selection-summary ${
+              resultKind ? `student-selection-summary--${resultKind}` : ""
+            }`}
+          >
+            <span className="student-class-kicker">{resultTitle}</span>
+            <strong>{hasSelection ? selectedName : "No student selected"}</strong>
+            <span>{resultMeta}</span>
+          </div>
         )}
       </div>
 
