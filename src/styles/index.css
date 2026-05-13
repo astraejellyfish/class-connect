@@ -862,6 +862,7 @@ body {
 .tagline {
   display: inline-block;
   width: auto;
+  margin: 14px 0 0 calc(clamp(72px, 9vw, 110px) + 10px);
   padding: 8px 20px;
   border: 2px solid var(--dark);
   background: var(--panel);

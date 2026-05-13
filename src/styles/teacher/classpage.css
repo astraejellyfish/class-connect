@@ -252,9 +252,11 @@
 
 .participation-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .session-status-pill {
@@ -1941,6 +1943,20 @@ button:disabled {
     gap: 8px;
   }
 
+  .participation-toolbar {
+    display: grid;
+    grid-template-columns: auto auto auto minmax(92px, 1fr);
+    align-items: center;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+
+  .participation-toolbar .session-status-pill,
+  .participation-toolbar .session-toolbar-btn,
+  .participation-toolbar .points-award-field {
+    min-width: 0;
+  }
+
   .session-status-pill,
   .session-toolbar-btn,
   .start-session-btn,
@@ -1958,7 +1974,7 @@ button:disabled {
   }
 
   .points-award-field {
-    width: 100%;
+    width: auto;
     justify-content: space-between;
   }
 
@@ -2051,6 +2067,38 @@ button:disabled {
 }
 
 @media (max-width: 480px) {
+  .participation-toolbar {
+    grid-template-columns: auto auto auto minmax(74px, 1fr);
+    gap: 5px;
+  }
+
+  .participation-toolbar .session-status-pill,
+  .participation-toolbar .session-toolbar-btn {
+    padding: 7px 8px !important;
+    font-size: 10px !important;
+  }
+
+  .participation-toolbar .points-award-field {
+    gap: 4px;
+    padding: 3px 6px;
+    border-radius: 9px;
+  }
+
+  .participation-toolbar .points-award-label {
+    font-size: 0;
+  }
+
+  .participation-toolbar .points-award-label::before {
+    content: "Pts";
+    font-size: 10px;
+  }
+
+  .participation-toolbar .points-award-field input {
+    width: 38px;
+    padding: 5px 4px;
+    font-size: 12px;
+  }
+
   .class-top {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
