@@ -46,14 +46,14 @@ function ClassPageHeader({
             className="activity-copy-invite-btn class-top-invite-btn"
             onClick={onEditClass}
           >
-            Edit class details
+            Edit details
           </button>
           <button
             type="button"
             className="activity-copy-invite-btn class-top-invite-btn"
             onClick={onCopyInvite}
           >
-            Copy invite link
+            Copy link
           </button>
         </div>
         {inviteStatus && <span>{inviteStatus}</span>}

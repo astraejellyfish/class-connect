@@ -12,12 +12,14 @@ import ProfilePhotoUpload from "../../components/common/ProfilePhotoUpload";
 import BottomNav, { teacherBottomNavItems } from "../../components/shared/BottomNav";
 import MobileHeader from "../../components/shared/MobileHeader";
 import TeacherSidebar from "../../components/shared/TeacherSidebar";
+import TeacherNotificationPanel from "../../components/teacher/TeacherNotificationPanel";
 import {
   cropProfilePhotoToSquare,
   getProfilePhotoError,
   updateProfilePhoto,
   uploadProfilePhoto,
 } from "../../features/profilePhoto";
+import { useTeacherNotifications } from "../../hooks/useTeacherNotifications";
 import "../../styles/teacher/dashboard.css";
 import "../../styles/teacher/settings.css";
 
@@ -82,7 +84,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState(defaultSettings);
   const [audioSettings, setAudioSettings] = useState(defaultAudioSettings);
   const [teacherId, setTeacherId] = useState("");
-  const [teacherName, setTeacherName] = useState("Teacher");
+  const [teacherName, setTeacherName] = useState("Instructor");
   const [teacherEmail, setTeacherEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [profilePhoto, setProfilePhoto] = useState(null);
@@ -100,6 +102,14 @@ export default function SettingsPage() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const {
+    notifications,
+    unreadNotifications,
+    loadingNotifications,
+    notificationsUnavailable,
+    handleReadNotification,
+    handleMarkAllRead,
+  } = useTeacherNotifications(teacherId);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -121,10 +131,15 @@ export default function SettingsPage() {
         teacherProfile?.name ||
           user.user_metadata?.name ||
           user.user_metadata?.full_name ||
-          "Teacher"
+          "Instructor"
       );
       setTeacherEmail(teacherProfile?.email || user.email || "");
-      setAvatarUrl(teacherProfile?.avatar_url || "");
+      setAvatarUrl(
+        teacherProfile?.avatar_url ||
+          user.user_metadata?.avatar_url ||
+          user.user_metadata?.picture ||
+          ""
+      );
     }
 
     loadAccount();
@@ -251,14 +266,20 @@ export default function SettingsPage() {
       <MobileHeader
         notificationOpen={notificationsOpen}
         onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        notificationCount={unreadNotifications}
         onProfileClick={() => navigate("/settings/account")}
         profileContent={
           avatarUrl ? <img src={avatarUrl} alt="Profile" /> : teacherName.charAt(0).toUpperCase()
         }
         notificationPanel={
-          <div className="notification-panel">
-            <p className="notification-empty">No notifications yet.</p>
-          </div>
+          <TeacherNotificationPanel
+            notifications={notifications}
+            unreadNotifications={unreadNotifications}
+            loadingNotifications={loadingNotifications}
+            notificationsUnavailable={notificationsUnavailable}
+            onMarkAllRead={handleMarkAllRead}
+            onReadNotification={handleReadNotification}
+          />
         }
       />
 
@@ -439,7 +460,7 @@ export default function SettingsPage() {
             <div className="settings-logout-card">
               <div>
                 <strong>End your current session</strong>
-                <p>Sign out of this teacher account on this device.</p>
+                <p>Sign out of this instructor account on this device.</p>
               </div>
               <button type="button" onClick={() => setShowLogoutConfirm(true)}>
                 Logout
@@ -458,7 +479,7 @@ export default function SettingsPage() {
                 <h3>About Class Connect</h3>
                 <p>
                   Class Connect is a classroom participation system designed to help
-                  teachers manage recitations in a fair, organized, and
+                  instructors manage recitations in a fair, organized, and
                   technology-assisted way.
                 </p>
                 <p>
@@ -488,15 +509,15 @@ export default function SettingsPage() {
                   selection, while students with more points can still be selected.
                 </p>
                 <p>
-                  After a spin or volunteer action, the teacher decides whether points
+                  After a spin or volunteer action, the instructor decides whether points
                   should be awarded. This keeps the final participation record under
-                  teacher control.
+                  instructor control.
                 </p>
               </article>
               <article>
                 <h3>Contacts</h3>
                 <p>
-                  For support, contact your Class Connect administrator, teacher, or
+                  For support, contact your Class Connect administrator, instructor, or
                   school system manager.
                 </p>
               </article>
@@ -530,7 +551,7 @@ export default function SettingsPage() {
               <p>
                 Class Connect supports fair classroom participation through class
                 sessions, student selection, volunteer queues, participation records,
-                point tracking, and teacher-managed activities.
+                point tracking, and instructor-managed activities.
               </p>
 
               <h3>2. Account Registration</h3>
@@ -550,8 +571,8 @@ export default function SettingsPage() {
               <h3>4. Participation and Points</h3>
               <p>
                 Participation records, volunteer queues, and points are managed by the
-                teacher. The system records and organizes participation data based on
-                class activities and teacher input.
+                instructor. The system records and organizes participation data based on
+                class activities and instructor input.
               </p>
 
               <h3>5. Data Collection</h3>
@@ -587,7 +608,7 @@ export default function SettingsPage() {
               <h3>8. System Limitations</h3>
               <p>
                 Class Connect assists classroom participation management, but it may
-                still depend on internet connection, device compatibility, teacher
+                still depend on internet connection, device compatibility, instructor
                 input, and correct student information.
               </p>
 
@@ -612,3 +633,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+

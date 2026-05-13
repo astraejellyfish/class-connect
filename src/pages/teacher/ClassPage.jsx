@@ -18,11 +18,13 @@ import BottomNav, { teacherBottomNavItems } from "../../components/shared/Bottom
 import MobileHeader from "../../components/shared/MobileHeader";
 import JoinRequestsCard from "../../components/teacher/JoinRequestsCard";
 import TeacherSidebar from "../../components/shared/TeacherSidebar";
+import TeacherNotificationPanel from "../../components/teacher/TeacherNotificationPanel";
 import TeacherParticipationPanel from "../../components/teacher/TeacherParticipationPanel";
 import SummaryPreviewModal from "../../components/common/SummaryPreviewModal";
 import { useAudioControls } from "../../hooks/useAudioControls";
 import { useTeacherParticipationActions } from "../../hooks/UseParticipation";
 import { useTeacherClassSession } from "../../hooks/useSession";
+import { useTeacherNotifications } from "../../hooks/useTeacherNotifications";
 import { useTeacherSettings } from "../../hooks/useTeacherSettings";
 import {
   formatFullNameTitle,
@@ -35,6 +37,28 @@ const ACTIVE_SELECTION_STATUSES = ["pending", "accepted", "skip_requested"];
 
 function isAiToolLog(message) {
   return AI_LOG_PATTERNS.some((pattern) => pattern.test(String(message || "")));
+}
+
+function shouldShowSessionAlert(message) {
+  const text = String(message || "").trim();
+  if (!text) return false;
+
+  return !(
+    /^.+?\s+was selected\.?$/i.test(text) ||
+    /^.+?\s+was skipped\.?$/i.test(text) ||
+    /^.+?\s+was skipped in the volunteer queue\.?$/i.test(text) ||
+    /^Instructor awarded\s+\d+\s+points?\s+to\s+.+?\.?$/i.test(text)
+  );
+}
+
+function shouldAutoClearAlert(message) {
+  const text = String(message || "").trim();
+  if (!text) return false;
+
+  // Don't auto-clear alerts for point awards to keep points confirmation visible
+  return !(
+    /^Instructor awarded\s+\d+\s+points?\s+to\s+.+?\.?$/i.test(text)
+  );
 }
 
 function getLastNameSortKey(name) {
@@ -147,7 +171,7 @@ function buildSummarySessionData({
   });
 
   return [
-    `Teacher: ${teacherName}`,
+    `Instructor: ${teacherName}`,
     `Subject: ${classData?.subject || "N/A"}`,
     `Subject Code: ${classData?.subjectCode || "N/A"}`,
     `Class Code: ${classData?.classCode || "N/A"}`,
@@ -198,7 +222,9 @@ function ClassPage() {
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState("");
   const [participationStatsByStudentId, setParticipationStatsByStudentId] = useState({});
-  const [teacherName, setTeacherName] = useState("Teacher");
+  const [teacherId, setTeacherId] = useState("");
+  const [teacherName, setTeacherName] = useState("Instructor");
+  const [teacherAvatar, setTeacherAvatar] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [spinning, setSpinning] = useState(false);
@@ -245,6 +271,14 @@ function ClassPage() {
   const [sessionSelectedStudentIds, setSessionSelectedStudentIds] = useState(
     () => new Set()
   );
+  const {
+    notifications,
+    unreadNotifications,
+    loadingNotifications,
+    notificationsUnavailable,
+    handleReadNotification,
+    handleMarkAllRead,
+  } = useTeacherNotifications(teacherId);
   const sessionAlertTimeoutRef = useRef(null);
   const studentsRef = useRef([]);
   const {
@@ -262,9 +296,11 @@ function ClassPage() {
   const showSessionAlert = useCallback((message) => {
     window.clearTimeout(sessionAlertTimeoutRef.current);
     setSessionAlert(message);
-    sessionAlertTimeoutRef.current = window.setTimeout(() => {
-      setSessionAlert("");
-    }, 4500);
+    if (shouldAutoClearAlert(message)) {
+      sessionAlertTimeoutRef.current = window.setTimeout(() => {
+        setSessionAlert("");
+      }, 4500);
+    }
   }, []);
 
   useEffect(() => {
@@ -275,14 +311,35 @@ function ClassPage() {
     studentsRef.current = students;
   }, [students]);
 
-  const addLog = useCallback((message, options = {}) => {
-    const time = new Date().toLocaleTimeString([], {
+  function formatLocalDateTime(value) {
+    if (!value) return "";
+
+    const text = String(value);
+    const hasTimezone = /(?:z|[+-]\d{2}:?\d{2})$/i.test(text);
+    const date = new Date(hasTimezone ? text : `${text}Z`);
+    if (Number.isNaN(date.getTime())) return "";
+
+    const dateStr = date.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const timeStr = date.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
-    const createdAt = new Date().toISOString();
+
+    return `${dateStr} ${timeStr}`;
+  }
+
+  const addLog = useCallback((message, options = {}) => {
+    const now = new Date();
+    const time = formatLocalDateTime(now.toISOString());
+    const createdAt = now.toISOString();
     setLogs((prev) => [{ id: `local-${createdAt}`, time, message, createdAt }, ...prev]);
-    showSessionAlert(message);
+    if (shouldShowSessionAlert(message)) {
+      showSessionAlert(message);
+    }
 
     supabase
       .from("class_session_logs")
@@ -353,16 +410,23 @@ function ClassPage() {
       if (!account || cancelled) {
         return;
       }
+      setTeacherId(account.user.id);
       setTeacherName(
         account.teacherProfile?.name ||
           account.user.user_metadata?.name ||
           account.user.user_metadata?.full_name ||
-          "Teacher"
+          "Instructor"
+      );
+      setTeacherAvatar(
+        account.teacherProfile?.avatar_url ||
+          account.user.user_metadata?.avatar_url ||
+          account.user.user_metadata?.picture ||
+          ""
       );
 
       const { data, error } = await supabase
         .from("classes")
-        .select("*")
+        .select("id, class_name, subject_code, class_code, program, teacher_id, session_active, session_started_at")
         .eq("id", classId)
         .eq("teacher_id", account.user.id)
         .single();
@@ -408,7 +472,9 @@ function ClassPage() {
         supabase
           .from("class_members")
           .select("id, class_id, student_id, joined_at, entry_confirmed, students(id, name, email, student_id)")
-          .eq("class_id", classId),
+          .eq("class_id", classId)
+          .order("joined_at", { ascending: false })
+          .limit(100),
         supabase
           .from("participation")
           .select("student_id, points")
@@ -440,7 +506,7 @@ function ClassPage() {
           .limit(30),
         supabase
           .from("ai_summaries")
-          .select("*")
+          .select("id, class_id, summary, created_at")
           .eq("class_id", classId)
           .order("created_at", { ascending: false })
           .limit(1),
@@ -506,23 +572,12 @@ function ClassPage() {
 
       setStudents(roster);
       setParticipationStatsByStudentId(statsByStudentId);
-      const latestEndLog = (logRows || []).find((row) => row.message === "Session ended.");
-      const endedAt = latestEndLog
-        ? new Date(latestEndLog.created_at).getTime()
-        : Number.NaN;
-      const logsExpired =
-        !data.session_active &&
-        Number.isFinite(endedAt) &&
-        Date.now() - endedAt > ENDED_SESSION_LOG_RETENTION_MS;
-      const visibleLogRows = logError || logsExpired ? [] : logRows || [];
+      const visibleLogRows = logError || !data.session_active ? [] : logRows || [];
 
       setLogs(
         visibleLogRows.map((row) => ({
               id: row.id,
-              time: new Date(row.created_at).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
+              time: formatLocalDateTime(row.created_at),
               message: row.message,
               isAiTool: isAiToolLog(row.message),
               createdAt: row.created_at,
@@ -893,7 +948,6 @@ function ClassPage() {
     () => logs.find((log) => log.message === "Session ended."),
     [logs]
   );
-
   const topScorers = useMemo(
     () =>
       [...students]
@@ -1124,6 +1178,11 @@ function ClassPage() {
   }, [classId]);
 
   const refreshSessionLogs = useCallback(async () => {
+    if (!sessionActive) {
+      setLogs([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("class_session_logs")
       .select("id, message, created_at")
@@ -1139,75 +1198,55 @@ function ClassPage() {
     setLogs(
       (data || []).map((row) => ({
         id: row.id,
-        time: new Date(row.created_at).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        time: formatLocalDateTime(row.created_at),
         message: row.message,
         isAiTool: isAiToolLog(row.message),
         createdAt: row.created_at,
       }))
     );
-  }, [classId]);
+  }, [classId, sessionActive]);
 
-  const refreshSelectionRequest = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("participation_selection_requests")
-      .select("id, class_id, student_id, points, status, created_at, expires_at")
-      .eq("class_id", classId)
-      .in("status", ACTIVE_SELECTION_STATUSES)
-      .order("created_at", { ascending: false })
-      .limit(1);
+const refreshSelectionRequest = useCallback(async () => {
+  const { data, error } = await supabase
+    .from("participation_selection_requests")
+    .select("id, class_id, student_id, points, status, created_at, expires_at")
+    .eq("class_id", classId)
+    .in("status", ACTIVE_SELECTION_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-    if (error) {
-      console.warn("Could not refresh selection request:", error);
-      setSelectionRequestUnavailable(true);
-      return;
-    }
+  if (error) {
+    console.warn("Could not refresh selection request:", error);
+    setSelectionRequestUnavailable(true);
+    return;
+  }
 
-    const request = data?.[0];
-    if (!request) {
-      setPendingPick(null);
-      return;
-    }
+  const request = data?.[0];
 
-    const student = studentsRef.current.find((item) => item.id === request.student_id);
-    if (!student) return;
+  // IMPORTANT:
+  // Do NOT clear pendingPick here.
+  // The polling refresh runs every 2 seconds, so clearing it here
+  // makes the Award/Skip confirmation disappear before the teacher answers.
+  if (!request) {
+    return;
+  }
 
-    if (request.status === "accepted") {
-      setPendingPick((current) =>
-        current?.requestId === request.id
-          ? { ...current, responseStatus: request.status }
-          : {
-              student,
-              pts: request.points,
-              requestId: request.id,
-              responseStatus: request.status,
-              expiresAt: request.expires_at,
-            }
-      );
-      return;
-    }
+  const student = studentsRef.current.find(
+    (item) => item.id === request.student_id
+  );
 
-    if (request.status === "skip_requested") {
-      setPendingPick((current) =>
-        current?.requestId === request.id
-          ? { ...current, responseStatus: request.status }
-          : {
-              student,
-              pts: request.points,
-              requestId: request.id,
-              responseStatus: request.status,
-              expiresAt: request.expires_at,
-            }
-      );
-      return;
-    }
+  if (!student) return;
 
-    setSelectedStudent(student);
+  setSelectedStudent(student);
+
+  if (ACTIVE_SELECTION_STATUSES.includes(request.status)) {
     setPendingPick((current) =>
       current?.requestId === request.id
-        ? { ...current, responseStatus: request.status, expiresAt: request.expires_at }
+        ? {
+            ...current,
+            responseStatus: request.status,
+            expiresAt: request.expires_at,
+          }
         : {
             student,
             pts: request.points,
@@ -1216,7 +1255,10 @@ function ClassPage() {
             expiresAt: request.expires_at,
           }
     );
-  }, [classId]);
+
+    setPickOutcome(null);
+  }
+}, [classId]);
 
   // Use a ref so refreshLiveSessionState has a stable identity,
   // preventing the 2-second polling useEffect from resetting on every render.
@@ -1266,6 +1308,7 @@ function ClassPage() {
             setSelectedStudent(null);
             setPendingPick(null);
             setPickOutcome(null);
+            setLogs([]);
           }
           refreshLiveSessionState();
         }
@@ -1311,7 +1354,7 @@ function ClassPage() {
           filter: `class_id=eq.${classId}`,
         },
         (payload) => {
-          if (payload.new?.message) {
+          if (shouldShowSessionAlert(payload.new?.message)) {
             showSessionAlert(payload.new.message);
           }
           refreshSessionLogs();
@@ -1515,23 +1558,24 @@ function ClassPage() {
       <MobileHeader
         notificationOpen={notificationsOpen}
         onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        notificationCount={unreadNotifications}
         onProfileClick={() => navigate("/settings/account")}
-        profileContent={teacherName.charAt(0).toUpperCase()}
+        profileContent={
+          teacherAvatar ? (
+            <img src={teacherAvatar} alt="Profile" />
+          ) : (
+            teacherName.charAt(0).toUpperCase()
+          )
+        }
         notificationPanel={
-          <div className="notification-panel">
-            {logs.length === 0 ? (
-              <p className="notification-empty">
-                Session alerts appear on this class page as they happen.
-              </p>
-            ) : (
-              logs.slice(0, 10).map((log) => (
-                <div key={log.id} className="notification-item">
-                  <span className="notification-time">{log.time}</span>
-                  <span className="notification-message">{log.message}</span>
-                </div>
-              ))
-            )}
-          </div>
+          <TeacherNotificationPanel
+            notifications={notifications}
+            unreadNotifications={unreadNotifications}
+            loadingNotifications={loadingNotifications}
+            notificationsUnavailable={notificationsUnavailable}
+            onMarkAllRead={handleMarkAllRead}
+            onReadNotification={handleReadNotification}
+          />
         }
       />
 
@@ -1585,9 +1629,7 @@ function ClassPage() {
             sessionActive={sessionActive}
             spinning={spinning}
             pendingPick={pendingPick}
-            pickOutcome={pickOutcome}
             spinRotation={spinRotation}
-            selectedStudent={selectedStudent}
             resolvingPick={resolvingPick}
             selectionRequestUnavailable={selectionRequestUnavailable}
             eligiblePresentCount={eligiblePresentCount}
@@ -1745,3 +1787,4 @@ function ClassPage() {
   );
 }
 export default ClassPage;
+

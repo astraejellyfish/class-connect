@@ -20,7 +20,7 @@ export default function DashboardTeacher() {
 
   const [classes, setClasses] = useState([]);
   const [totalStudents, setTotalStudents] = useState(0);
-  const [teacherName, setTeacherName] = useState("Teacher");
+  const [teacherName, setTeacherName] = useState("Instructor");
   const [teacherAvatar, setTeacherAvatar] = useState("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -53,6 +53,49 @@ export default function DashboardTeacher() {
     loadClasses();
   }, []);
 
+  useEffect(() => {
+    if (!teacherId || notificationsUnavailable) return undefined;
+
+    const channel = supabase
+      .channel(`teacher-notifications-${teacherId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `teacher_id=eq.${teacherId}`,
+        },
+        (payload) => {
+          if (!payload.new) return;
+          setNotifications((prev) => {
+            if (prev.some((item) => item.id === payload.new.id)) return prev;
+            return [payload.new, ...prev].slice(0, 50);
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `teacher_id=eq.${teacherId}`,
+        },
+        (payload) => {
+          if (!payload.new) return;
+          setNotifications((prev) =>
+            prev.map((item) => (item.id === payload.new.id ? payload.new : item))
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [notificationsUnavailable, teacherId]);
+
   const loadClasses = async () => {
     setLoading(true);
 
@@ -69,7 +112,7 @@ export default function DashboardTeacher() {
       teacherProfile?.name ||
         user.user_metadata?.name ||
         user.user_metadata?.full_name ||
-        "Teacher"
+        "Instructor"
     );
 
     setTeacherAvatar(
@@ -81,7 +124,7 @@ export default function DashboardTeacher() {
 
     const { data, error } = await supabase
       .from("classes")
-      .select("*")
+      .select("id, class_name, subject_code, class_code, program, teacher_id, session_active, session_started_at, created_at")
       .eq("teacher_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -206,7 +249,7 @@ export default function DashboardTeacher() {
 
     const account = await requireTeacher(navigate);
     if (!account) {
-      setModalError("Please sign in with a teacher account.");
+      setModalError("Please sign in with a instructor account.");
       return;
     }
     const { user } = account;
@@ -395,7 +438,7 @@ export default function DashboardTeacher() {
       <main className="dash-main">
         <div className="dash-top">
           <div className="dash-top-text">
-            <h1>Teacher Dashboard</h1>
+            <h1>Instructor Dashboard</h1>
           </div>
           <div className="dash-top-side">
             <div className="notification-wrap">
@@ -479,7 +522,7 @@ export default function DashboardTeacher() {
                 )}
               </div>
               <h3>{teacherName}</h3>
-              <p>Teacher Account</p>
+              <p>Instructor Account</p>
             </div>
 
             <div className="calendar-card dash-top-date">
@@ -620,3 +663,5 @@ export default function DashboardTeacher() {
     </div>
   );
 }
+
+

@@ -11,12 +11,14 @@ import ConfirmModal from "../../components/common/ConfirmModal";
 import ProfilePhotoUpload from "../../components/common/ProfilePhotoUpload";
 import BottomNav, { studentBottomNavItems } from "../../components/shared/BottomNav";
 import MobileHeader from "../../components/shared/MobileHeader";
+import StudentNotificationPanel from "../../components/student/StudentNotificationPanel";
 import {
   cropProfilePhotoToSquare,
   getProfilePhotoError,
   updateProfilePhoto,
   uploadProfilePhoto,
 } from "../../features/profilePhoto";
+import { useStudentNotifications } from "../../hooks/useStudentNotifications";
 import "../../styles/student/myclasses.css";
 import "../../styles/student/settings.css";
 
@@ -99,6 +101,13 @@ export default function SettingsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const {
+    notifications,
+    unreadNotifications,
+    loadingNotifications,
+    notificationsReadAt,
+    handleMarkAllRead,
+  } = useStudentNotifications(studentUserId);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -122,7 +131,12 @@ export default function SettingsPage() {
       );
       setStudentEmail(studentProfile?.email || user.email || "");
       setStudentNumber(studentProfile?.student_id || "");
-      setAvatarUrl(studentProfile?.avatar_url || "");
+      setAvatarUrl(
+        studentProfile?.avatar_url ||
+          user.user_metadata?.avatar_url ||
+          user.user_metadata?.picture ||
+          ""
+      );
     }
 
     loadAccount();
@@ -249,14 +263,19 @@ export default function SettingsPage() {
       <MobileHeader
         notificationOpen={notificationsOpen}
         onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        notificationCount={unreadNotifications}
         onProfileClick={() => setOpenSection("account")}
         profileContent={
           avatarUrl ? <img src={avatarUrl} alt="Profile" /> : studentName.charAt(0).toUpperCase()
         }
         notificationPanel={
-          <div className="student-notification-panel">
-            <p className="student-notification-empty">No notifications yet.</p>
-          </div>
+          <StudentNotificationPanel
+            notifications={notifications}
+            unreadNotifications={unreadNotifications}
+            loadingNotifications={loadingNotifications}
+            notificationsReadAt={notificationsReadAt}
+            onMarkAllRead={handleMarkAllRead}
+          />
         }
       />
 
@@ -459,7 +478,7 @@ export default function SettingsPage() {
                 <p>
                   Class Connect helps students join class sessions, volunteer for
                   participation, view activity records, and track points awarded by
-                  teachers.
+                  instructors.
                 </p>
               </article>
               <article>
@@ -479,7 +498,7 @@ export default function SettingsPage() {
               <article>
                 <h3>How System Works</h3>
                 <p>
-                  Your teacher manages sessions, spinner selections, volunteer
+                  Your instructor manages sessions, spinner selections, volunteer
                   approvals, and final point awards. Student views update as those
                   records change.
                 </p>
@@ -487,7 +506,7 @@ export default function SettingsPage() {
               <article>
                 <h3>Contacts</h3>
                 <p>
-                  For support, contact your teacher, Class Connect administrator, or
+                  For support, contact your instructor, Class Connect administrator, or
                   school system manager.
                 </p>
               </article>
@@ -521,7 +540,7 @@ export default function SettingsPage() {
               <p>
                 Class Connect supports fair classroom participation through class
                 sessions, student selection, volunteer queues, participation records,
-                point tracking, and teacher-managed activities.
+                point tracking, and instructor-managed activities.
               </p>
 
               <h3>2. Account Registration</h3>
@@ -541,8 +560,8 @@ export default function SettingsPage() {
               <h3>4. Participation and Points</h3>
               <p>
                 Participation records, volunteer queues, and points are managed by
-                the teacher. The system records and organizes participation data
-                based on class activities and teacher input.
+                the instructor. The system records and organizes participation data
+                based on class activities and instructor input.
               </p>
 
               <h3>5. Data Collection</h3>
@@ -578,7 +597,7 @@ export default function SettingsPage() {
               <h3>8. System Limitations</h3>
               <p>
                 Class Connect assists classroom participation management, but it may
-                still depend on internet connection, device compatibility, teacher
+                still depend on internet connection, device compatibility, instructor
                 input, and correct student information.
               </p>
 
@@ -602,3 +621,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+

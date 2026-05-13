@@ -4,8 +4,6 @@ import { supabase } from "../../lib/supabase";
 import { requireStudent } from "../../features/authRole";
 import { canEnterClass } from "../../features/studentClasses";
 import { updateSelectionResponse } from "../../features/participation";
-import StudentParticipationPanel from "../../components/student/StudentParticipationPanel";
-import VolunteerQueue from "../../components/student/VolunteerQueue";
 import { useAudioControls } from "../../hooks/useAudioControls";
 import {
   formatFullNameTitle,
@@ -14,6 +12,8 @@ import {
 import ConfirmModal from "../../components/common/ConfirmModal";
 import BottomNav, { studentBottomNavItems } from "../../components/shared/BottomNav";
 import MobileHeader from "../../components/shared/MobileHeader";
+import StudentNotificationPanel from "../../components/student/StudentNotificationPanel";
+import { useStudentNotifications } from "../../hooks/useStudentNotifications";
 import "../../styles/teacher/classpage.css";
 import "../../styles/student/myclasses.css";
 import "../../styles/student/classpageS.css";
@@ -67,10 +67,17 @@ function formatLocalActivityTime(value) {
   const date = new Date(hasTimezone ? text : `${text}Z`);
   if (Number.isNaN(date.getTime())) return "";
 
-  return date.toLocaleTimeString([], {
+  const dateStr = date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timeStr = date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  return `${dateStr} ${timeStr}`;
 }
 
 function getSelectedNameFromLog(message) {
@@ -99,7 +106,7 @@ function getLatestSelectionFromLogs(logRows = [], roster = []) {
       id: `log-${row.id || row.created_at}`,
       class_id: row.class_id,
       student_id: student.id,
-      points: 0,
+      points: null,
       status: "selected",
       created_at: row.created_at,
       fromLog: true,
@@ -122,12 +129,12 @@ function cleanSessionMessage(message) {
   }
 
   const awardedMatch =
-    text.match(/^Teacher awarded\s+(\d+)\s+points?\s+to\s+(.+?)\.?$/i) ||
+    text.match(/^(?:Teacher|Instructor) awarded\s+(\d+)\s+points?\s+to\s+(.+?)\.?$/i) ||
     text.match(/^(.+?)\s+\(\s*(.+?)\s*\)\s+is selected for\s+(\d+)\s+pts?\s+- accepted\.?$/i);
   if (awardedMatch) {
     const points = awardedMatch[3] || awardedMatch[1];
     const name = awardedMatch[2];
-    return `Teacher awarded ${points} point${Number(points) === 1 ? "" : "s"} to ${formatFullNameTitle(name)}.`;
+    return `Instructor awarded ${points} point${Number(points) === 1 ? "" : "s"} to ${formatFullNameTitle(name)}.`;
   }
 
   const rawSkipMatch = text.match(
@@ -169,6 +176,7 @@ export default function ClassPageStudent() {
   const { classId } = useParams();
   const [classData, setClassData] = useState(null);
   const [membership, setMembership] = useState(null);
+  const [studentId, setStudentId] = useState("");
   const [studentName, setStudentName] = useState("Student");
   const [studentAvatar, setStudentAvatar] = useState("");
   const [activity, setActivity] = useState([]);
@@ -181,7 +189,6 @@ export default function ClassPageStudent() {
   const [requestingJoin, setRequestingJoin] = useState(false);
   const [volunteering, setVolunteering] = useState(false);
   const [joinRequestAttempts, setJoinRequestAttempts] = useState(0);
-  const [volunteerAttempts, setVolunteerAttempts] = useState(0);
   const [joinRequestMessage, setJoinRequestMessage] = useState("");
   const [sessionMessage, setSessionMessage] = useState("");
   const [status, setStatus] = useState("Loading class...");
@@ -190,13 +197,18 @@ export default function ClassPageStudent() {
   const [currentSelection, setCurrentSelection] = useState(null);
   const [selectionMessage, setSelectionMessage] = useState("");
   const [respondingSelection, setRespondingSelection] = useState(false);
-  const [studentListOpen, setStudentListOpen] = useState(false);
+  const [selectionPopup, setSelectionPopup] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const previousPendingSelectionIdRef = useRef(null);
+  const previousLogSelectionIdRef = useRef(null);
+  const logSelectionWatcherReadyRef = useRef(false);
+  const lastPickedPopupRef = useRef({ studentId: "", shownAt: 0 });
   const sessionAlertTimeoutRef = useRef(null);
+  const selectionPopupTimeoutRef = useRef(null);
   const activityListRef = useRef(null);
   const studentsRef = useRef([]);
+  const studentNameRef = useRef(studentName);
   const sessionEventsRef = useRef([]);
   const classLoaded = Boolean(classData);
   const sessionOngoing = Boolean(classData?.session_active);
@@ -208,6 +220,13 @@ export default function ClassPageStudent() {
   } = useAudioControls({
     sessionActive: sessionOngoing,
   });
+  const {
+    notifications,
+    unreadNotifications,
+    loadingNotifications,
+    notificationsReadAt,
+    handleMarkAllRead,
+  } = useStudentNotifications(studentId);
 
   const showSessionAlert = useCallback((message) => {
     window.clearTimeout(sessionAlertTimeoutRef.current);
@@ -218,12 +237,19 @@ export default function ClassPageStudent() {
   }, []);
 
   useEffect(() => {
-    return () => window.clearTimeout(sessionAlertTimeoutRef.current);
+    return () => {
+      window.clearTimeout(sessionAlertTimeoutRef.current);
+      window.clearTimeout(selectionPopupTimeoutRef.current);
+    };
   }, []);
 
   useEffect(() => {
     studentsRef.current = students;
   }, [students]);
+
+  useEffect(() => {
+    studentNameRef.current = studentName;
+  }, [studentName]);
 
   useEffect(() => {
     sessionEventsRef.current = sessionEvents;
@@ -237,13 +263,19 @@ export default function ClassPageStudent() {
         return;
       }
       const studentUserId = account.user.id;
+      setStudentId(studentUserId);
       setStudentName(
         account.studentProfile?.name ||
           account.user.user_metadata?.name ||
           account.user.user_metadata?.full_name ||
           "Student"
       );
-      setStudentAvatar(account.studentProfile?.avatar_url || "");
+      setStudentAvatar(
+        account.studentProfile?.avatar_url ||
+          account.user.user_metadata?.avatar_url ||
+          account.user.user_metadata?.picture ||
+          ""
+      );
 
       // Make sure the student really joined this class.
       const [
@@ -258,14 +290,14 @@ export default function ClassPageStudent() {
         supabase
           .from("class_members")
           .select(
-            "id, class_id, student_id, joined_at, entry_confirmed, classes(id, class_name, subject_code, class_code, program, teacher_id, session_active, session_started_at)"
+            "id, class_id, student_id, joined_at, entry_confirmed, classes!inner(id, class_name, subject_code, class_code, program, teacher_id, session_active, session_started_at)"
           )
           .eq("class_id", classId)
           .eq("student_id", studentUserId)
           .maybeSingle(),
         supabase
           .from("participation")
-          .select("id, student_id, points, created_at, students(id, name, email, student_id)")
+          .select("id, student_id, points, created_at, students!inner(id, name, email, student_id)")
           .eq("class_id", classId)
           .order("created_at", { ascending: false }),
         supabase
@@ -277,11 +309,11 @@ export default function ClassPageStudent() {
           .maybeSingle(),
         supabase
           .from("class_members")
-          .select("id, student_id, entry_confirmed, students(id, name, email, student_id)")
+          .select("id, student_id, entry_confirmed, students!inner(id, name, email, student_id)")
           .eq("class_id", classId),
         supabase
           .from("volunteer_queue")
-          .select("id, class_id, student_id, status, created_at, students(id, name, email, student_id)")
+          .select("id, class_id, student_id, status, created_at, students!inner(id, name, email, student_id)")
           .eq("class_id", classId)
           .eq("status", "waiting")
           .order("created_at", { ascending: true }),
@@ -337,7 +369,6 @@ export default function ClassPageStudent() {
       if (!requestAttemptError) {
         setJoinRequestAttempts(requestAttemptCount || 0);
       }
-      setVolunteerAttempts(0);
 
       setClassData(classRow);
       setMembership({
@@ -355,7 +386,17 @@ export default function ClassPageStudent() {
         .map((item) => mapRosterStudent(item, pointsByStudentId))
         .sort((a, b) => getLastNameSortKey(a.name).localeCompare(getLastNameSortKey(b.name)));
       setStudents(roster);
-      setVolunteerQueue((queueRows || []).map(mapQueueRow));
+      setVolunteerQueue(
+        classRow.session_active
+          ? (queueRows || [])
+              .filter(
+                (row) =>
+                  !classRow.session_started_at ||
+                  new Date(row.created_at) >= new Date(classRow.session_started_at)
+              )
+              .map(mapQueueRow)
+          : []
+      );
       setJoinRequest(requestRow || null);
 
       const { data: selectionRow, error: selectionError } = await supabase
@@ -369,10 +410,27 @@ export default function ClassPageStudent() {
       if (!selectionError) {
         setPendingSelection(selectionRow || null);
       }
+      const latestSelection = currentSelectionRows?.[0];
+      const latestSelectionInSession =
+        latestSelection &&
+        (!classRow.session_started_at ||
+          new Date(latestSelection.created_at) >= new Date(classRow.session_started_at))
+          ? latestSelection
+          : null;
       setCurrentSelection(
-        currentSelectionRows?.[0] ||
-          selectionRow ||
-          getLatestSelectionFromLogs(logRows || [], roster)
+        classRow.session_active
+          ? latestSelectionInSession ||
+              selectionRow ||
+              getLatestSelectionFromLogs(
+                classRow.session_started_at
+                  ? (logRows || []).filter(
+                      (row) =>
+                        new Date(row.created_at) >= new Date(classRow.session_started_at)
+                    )
+                  : logRows || [],
+                roster
+              )
+          : null
       );
       setStatus("");
     }
@@ -419,8 +477,6 @@ export default function ClassPageStudent() {
     return null;
   }, [currentSelection, students, pointsByStudentIdFromActivity]);
 
-  const presentCount = students.filter((student) => student.present).length;
-
   const topScorers = useMemo(
     () =>
       [...students]
@@ -434,54 +490,128 @@ export default function ClassPageStudent() {
   );
 
   const activityFeed = useMemo(() => {
-    const pointItems = activity.map((row) => {
+    if (!classData?.session_active || !classData?.session_started_at) return [];
+
+    const sessionStartedAt = new Date(classData.session_started_at);
+    const sessionActivity = activity.filter(
+      (row) => new Date(row.created_at) >= sessionStartedAt
+    );
+    const sessionLogs = sessionEvents.filter(
+      (row) => new Date(row.created_at) >= sessionStartedAt
+    );
+
+    const pointItems = sessionActivity.map((row) => {
       const student = Array.isArray(row.students) ? row.students[0] : row.students;
       const name = formatFullNameTitle(student?.name || "Student");
 
       return {
         id: `points-${row.id}`,
         createdAt: row.created_at,
-        message: `Teacher awarded ${row.points} point${
+        message: `Instructor awarded ${row.points} point${
           row.points === 1 ? "" : "s"
         } to ${name}.`,
       };
     });
 
-    const sessionItems = sessionEvents
+    const sessionItems = sessionLogs
       .map((row) => ({
         id: `session-${row.id}`,
         createdAt: row.created_at,
         message: cleanSessionMessage(row.message),
       }))
-      .filter((row) => row.message && !/^Teacher awarded \d+ point/i.test(row.message));
+      .filter(
+        (row) =>
+          row.message &&
+          !/^(?:Teacher|Instructor) awarded \d+ point/i.test(row.message) &&
+          !/ volunteered\.?$/i.test(row.message)
+      );
 
-    return [...pointItems, ...sessionItems].sort(
+    const seen = new Set();
+    return [...pointItems, ...sessionItems]
+      .sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }, [activity, sessionEvents]);
-
+      )
+      .filter((item) => {
+        const key = `${item.message}-${formatLocalActivityTime(item.createdAt)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }, [activity, classData?.session_active, classData?.session_started_at, sessionEvents]);
   useEffect(() => {
     if (activityListRef.current) {
       activityListRef.current.scrollTop = 0;
     }
   }, [activityFeed.length]);
 
+  const showPickedPopup = useCallback(
+    (selection) => {
+      if (!selection?.id) return;
+      const now = Date.now();
+      const duplicateRecentPopup =
+        selection.student_id &&
+        lastPickedPopupRef.current.studentId === selection.student_id &&
+        now - lastPickedPopupRef.current.shownAt < 4000;
+
+      if (duplicateRecentPopup) return;
+
+      lastPickedPopupRef.current = {
+        studentId: selection.student_id || "",
+        shownAt: now,
+      };
+  
+      playResultSound();
+  
+      const joinedStudent = Array.isArray(selection.students)
+        ? selection.students[0]
+        : selection.students;
+      const rosterStudent = studentsRef.current.find(
+        (student) => student.id === selection.student_id
+      );
+  
+      setSelectionPopup({
+        name: formatFullNameTitle(
+          rosterStudent?.name || joinedStudent?.name || studentNameRef.current
+        ),
+        points: selection.points == null ? null : Number(selection.points),
+      });
+  
+      window.clearTimeout(selectionPopupTimeoutRef.current);
+      selectionPopupTimeoutRef.current = window.setTimeout(() => {
+        setSelectionPopup(null);
+      }, 3000);
+    },
+    [playResultSound]
+  );
+
   useEffect(() => {
-    if (!pendingSelection?.id) {
-      previousPendingSelectionIdRef.current = null;
+    if (!pendingSelection?.id) return;
+  
+    if (previousPendingSelectionIdRef.current === pendingSelection.id) return;
+  
+    previousPendingSelectionIdRef.current = pendingSelection.id;
+    showPickedPopup(pendingSelection);
+  }, [pendingSelection, showPickedPopup]);
+
+  useEffect(() => {
+    if (
+      pendingSelection ||
+      !currentSelection?.fromLog ||
+      currentSelection.student_id !== membership?.student_id
+    ) {
       return;
     }
 
-    if (previousPendingSelectionIdRef.current !== pendingSelection.id) {
-      previousPendingSelectionIdRef.current = pendingSelection.id;
-      playResultSound();
-    }
-  }, [pendingSelection?.id, playResultSound]);
+    if (previousLogSelectionIdRef.current === currentSelection.id) return;
+
+    previousLogSelectionIdRef.current = currentSelection.id;
+    showPickedPopup(currentSelection);
+  }, [currentSelection, membership?.student_id, pendingSelection, showPickedPopup]);
 
 
   const handleJoinSession = async () => {
     if (!canJoinSession) {
-      setStatus("Entry window expired. Please wait for teacher confirmation.");
+      setStatus("Entry window expired. Please wait for instructor confirmation.");
       return;
     }
 
@@ -514,48 +644,69 @@ export default function ClassPageStudent() {
   };
 
   const refreshParticipationState = useCallback(async () => {
-    const [
-      { data: activityRows },
-      { data: memberRows },
-      { data: queueRows },
-      { data: selectionRow },
-      { data: currentSelectionRows },
-    ] =
-      await Promise.all([
-        supabase
-          .from("participation")
-          .select("id, student_id, points, created_at, students(id, name, email, student_id)")
-          .eq("class_id", classId)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("class_members")
-          .select("id, student_id, entry_confirmed, students(id, name, email, student_id)")
-          .eq("class_id", classId),
-        supabase
-          .from("volunteer_queue")
-          .select("id, class_id, student_id, status, created_at, students(id, name, email, student_id)")
-          .eq("class_id", classId)
-          .eq("status", "waiting")
-          .order("created_at", { ascending: true }),
-        membership?.student_id
-          ? supabase
-              .from("participation_selection_requests")
-              .select(PARTICIPATION_SELECTION_SELECT)
-              .eq("class_id", classId)
-              .eq("student_id", membership.student_id)
-              .eq("status", "pending")
-              .maybeSingle()
-          : { data: null },
-        supabase
+    const sessionStartedAt = classData?.session_started_at;
+    const activeSession = Boolean(classData?.session_active && sessionStartedAt);
+    
+    // Only run queries if session is active or if we need basic data
+    if (!activeSession && students.length > 0) {
+      return;
+    }
+
+    const ownSelectionQuery = membership?.student_id
+      ? supabase
           .from("participation_selection_requests")
           .select(PARTICIPATION_SELECTION_SELECT)
           .eq("class_id", classId)
-          // Include awarded/skipped so the student sees the resolved outcome
-          // ("Points awarded" / "No points awarded") after the teacher acts.
+          .eq("student_id", membership.student_id)
+          .eq("status", "pending")
+          .maybeSingle()
+      : { data: null };
+    const currentSelectionQuery = activeSession
+      ? supabase
+          .from("participation_selection_requests")
+          .select(PARTICIPATION_SELECTION_SELECT)
+          .eq("class_id", classId)
           .in("status", ["pending", "accepted", "skip_requested", "awarded", "skipped"])
+          .gte("created_at", sessionStartedAt)
           .order("created_at", { ascending: false })
-          .limit(1),
-      ]);
+          .limit(1)
+      : { data: [] };
+
+    const queries = [
+      supabase
+        .from("participation")
+        .select("id, student_id, points, created_at, students!inner(id, name, email, student_id)")
+        .eq("class_id", classId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("class_members")
+        .select("id, student_id, entry_confirmed, students!inner(id, name, email, student_id)")
+        .eq("class_id", classId),
+    ];
+
+    // Only include volunteer queue query for active sessions
+    if (activeSession) {
+      queries.push(
+        supabase
+          .from("volunteer_queue")
+          .select("id, class_id, student_id, status, created_at, students!inner(id, name, email, student_id)")
+          .eq("class_id", classId)
+          .eq("status", "waiting")
+          .order("created_at", { ascending: true })
+      );
+    }
+
+    queries.push(ownSelectionQuery, currentSelectionQuery);
+
+    const [
+      { data: activityRows },
+      { data: memberRows },
+      ...restQueries
+    ] = await Promise.all(queries);
+
+    const { data: queueRows } = activeSession ? restQueries[0] : { data: [] };
+    const { data: selectionRow } = activeSession ? restQueries[1] : restQueries[0];
+    const { data: currentSelectionRows } = activeSession ? restQueries[2] : restQueries[1];
 
     setActivity(activityRows || []);
     const pointsByStudentId = (activityRows || []).reduce((acc, item) => {
@@ -566,20 +717,41 @@ export default function ClassPageStudent() {
       .map((item) => mapRosterStudent(item, pointsByStudentId))
       .sort((a, b) => getLastNameSortKey(a.name).localeCompare(getLastNameSortKey(b.name)));
     setStudents(roster);
-    setVolunteerQueue((queueRows || []).map(mapQueueRow));
+    setVolunteerQueue(
+      activeSession
+        ? (queueRows || [])
+            .filter((row) => !sessionStartedAt || new Date(row.created_at) >= new Date(sessionStartedAt))
+            .map(mapQueueRow)
+        : []
+    );
     setPendingSelection(selectionRow || null);
     setCurrentSelection(
-      currentSelectionRows?.[0] ||
-        selectionRow ||
-        getLatestSelectionFromLogs(sessionEventsRef.current, roster)
+      activeSession
+        ? currentSelectionRows?.[0] ||
+            selectionRow ||
+            getLatestSelectionFromLogs(
+              sessionStartedAt
+                ? sessionEventsRef.current.filter(
+                    (row) => new Date(row.created_at) >= new Date(sessionStartedAt)
+                  )
+                : sessionEventsRef.current,
+              roster
+            )
+        : null
     );
-  }, [classId, membership?.student_id]);
+  }, [classData?.session_active, classData?.session_started_at, classId, membership?.student_id]);
 
   const refreshSessionEvents = useCallback(async () => {
+    if (!classData?.session_active || !classData?.session_started_at) {
+      setSessionEvents([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("class_session_logs")
       .select("id, message, created_at")
       .eq("class_id", classId)
+      .gte("created_at", classData.session_started_at)
       .order("created_at", { ascending: false })
       .limit(40);
 
@@ -594,7 +766,7 @@ export default function ClassPageStudent() {
     if (fallbackSelection) {
       setCurrentSelection((current) => current || fallbackSelection);
     }
-  }, [classId]);
+  }, [classData?.session_active, classData?.session_started_at, classId]);
 
   const refreshClassStatus = useCallback(async () => {
     const { data, error } = await supabase
@@ -630,6 +802,7 @@ export default function ClassPageStudent() {
       setJoinedSession(false);
       setPendingSelection(null);
       setCurrentSelection(null);
+      setSessionEvents([]);
     }
   }, [classId]);
 
@@ -729,7 +902,8 @@ export default function ClassPageStudent() {
             payload.eventType === "INSERT" &&
             payload.new?.student_id === membership?.student_id
           ) {
-            playResultSound();
+            setPendingSelection(payload.new);
+            setCurrentSelection(payload.new);
           } else if (payload.eventType === "INSERT") {
             playNotificationSound();
           } else if (
@@ -779,6 +953,13 @@ export default function ClassPageStudent() {
             studentsRef.current
           );
           if (fallbackSelection) {
+            if (
+              fallbackSelection.student_id === membership?.student_id &&
+              previousLogSelectionIdRef.current !== fallbackSelection.id
+            ) {
+              previousLogSelectionIdRef.current = fallbackSelection.id;
+              showPickedPopup(fallbackSelection);
+            }
             setCurrentSelection(fallbackSelection);
           }
           refreshSessionEvents();
@@ -795,10 +976,10 @@ export default function ClassPageStudent() {
     membership?.student_id,
     playNotificationSound,
     playAcceptSound,
-    playResultSound,
     playSkipSound,
     refreshParticipationState,
     refreshSessionEvents,
+    showPickedPopup,
     showSessionAlert,
     status,
   ]);
@@ -836,13 +1017,16 @@ export default function ClassPageStudent() {
             setJoinedSession(false);
             setPendingSelection(null);
             setCurrentSelection(null);
+            setSessionEvents([]);
           }
           showSessionAlert(
             payload.new?.session_active ? "Session started." : "Session ended."
           );
           playNotificationSound();
           refreshParticipationState();
-          refreshSessionEvents();
+          if (payload.new?.session_active) {
+            refreshSessionEvents();
+          }
         }
       )
       .subscribe();
@@ -887,30 +1071,7 @@ export default function ClassPageStudent() {
     }
 
     setVolunteerQueue((prev) => [...prev, mapQueueRow(data)]);
-    setVolunteerAttempts((prev) => prev + 1);
     setSessionMessage("You joined the volunteer queue.");
-    const volunteerMessage = `${formatFullNameTitle(studentName)} volunteered.`;
-    setSessionEvents((prev) => [
-      {
-        id: `local-volunteer-${data.id}`,
-        message: volunteerMessage,
-        created_at: data.created_at,
-      },
-      ...prev,
-    ]);
-    supabase
-      .from("class_session_logs")
-      .insert({
-        class_id: classId,
-        teacher_id: classData?.teacher_id,
-        session_started_at: classData?.session_started_at,
-        message: volunteerMessage,
-      })
-      .then(({ error: logError }) => {
-        if (logError) {
-          console.warn("Could not save volunteer log:", logError);
-        }
-      });
     playNotificationSound();
   };
 
@@ -942,7 +1103,7 @@ export default function ClassPageStudent() {
 
     setJoinRequest(data);
     setJoinRequestAttempts((prev) => prev + 1);
-    setJoinRequestMessage("Request sent. Please wait for teacher approval.");
+    setJoinRequestMessage("Request sent. Please wait for instructor approval.");
     playNotificationSound();
   };
 
@@ -961,8 +1122,8 @@ export default function ClassPageStudent() {
 
     setSelectionMessage(
       nextStatus === "accepted"
-        ? "Accepted. Waiting for your teacher to award points."
-        : "Skip request sent to your teacher."
+        ? "Accepted. Waiting for your instructor to award points."
+        : "Skip request sent to your instructor."
     );
     if (nextStatus === "accepted") {
       playAcceptSound();
@@ -982,6 +1143,7 @@ export default function ClassPageStudent() {
       <MobileHeader
         notificationOpen={notificationsOpen}
         onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        notificationCount={unreadNotifications}
         onProfileClick={() => navigate("/student/settings")}
         profileContent={
           studentAvatar ? (
@@ -991,26 +1153,13 @@ export default function ClassPageStudent() {
           )
         }
         notificationPanel={
-          <div className="student-notification-panel">
-            {sessionEvents.length === 0 ? (
-              <p className="student-notification-empty">
-                Session alerts appear on this class page as they happen.
-              </p>
-            ) : (
-              sessionEvents.slice(0, 10).map((row) => {
-                const clean = cleanSessionMessage(row.message);
-                if (!clean) return null;
-                return (
-                  <div key={row.id} className="notification-item">
-                    <span className="notification-time">
-                      {formatLocalActivityTime(row.created_at)}
-                    </span>
-                    <span className="notification-message">{clean}</span>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <StudentNotificationPanel
+            notifications={notifications}
+            unreadNotifications={unreadNotifications}
+            loadingNotifications={loadingNotifications}
+            notificationsReadAt={notificationsReadAt}
+            onMarkAllRead={handleMarkAllRead}
+          />
         }
       />
 
@@ -1076,7 +1225,7 @@ export default function ClassPageStudent() {
                   </p>
                   <span>{classData.program || "No program/year/block"}</span>
                   <small>
-                    Teacher: {classData.teacher?.name || "Teacher name unavailable"}
+                    Instructor: {classData.teacher?.name || "Instructor name unavailable"}
                   </small>
                 </>
               )}
@@ -1123,165 +1272,173 @@ export default function ClassPageStudent() {
           </div>
         )}
 
+        {selectionPopup && (
+          <div className="student-picked-popup" role="status" aria-live="polite">
+            <div className="student-picked-popup-card">
+              <span className="student-class-kicker">You were picked</span>
+              <strong>{selectionPopup.name}</strong>
+              <p>
+                Get ready to participate for <b>{selectionPopup.points ?? "assigned"}</b> pt
+                {selectionPopup.points === 1 ? "" : "s"}.
+              </p>
+            </div>
+          </div>
+        )}
+
         {status ? (
           <section className="student-session-card student-class-status-card">
             <h2>{status}</h2>
-            <p>Students must enter within 15 minutes unless the teacher confirms entry.</p>
+            <p>Students must enter within 15 minutes unless the instructor confirms entry.</p>
           </section>
         ) : (
           <>
             <section className="student-class-session-grid">
-              <div className="student-class-primary-stack">
-                <StudentParticipationPanel
-                  students={students}
-                  selectedStudent={selectedStudent}
-                  sessionOngoing={sessionOngoing}
-                  currentSelection={currentSelection}
-                  pendingSelection={pendingSelection}
-                  respondingSelection={respondingSelection}
-                  selectionMessage={selectionMessage}
-                  canJoinSession={canJoinSession}
-                  volunteering={volunteering}
-                  volunteerLimitReached={volunteerLimitReached}
-                  alreadyVolunteered={alreadyVolunteered}
-                  volunteerAttempts={volunteerAttempts}
-                  sessionMessage={sessionMessage}
-                  onSelectionResponse={handleSelectionResponse}
-                  onVolunteer={handleVolunteer}
-                />
-
-                <VolunteerQueue queue={volunteerQueue} />
-              </div>
-
-              <aside className="student-side-stack">
-                <section className="student-session-card student-own-points-card">
-                  <span className="student-class-kicker">Your points</span>
+              <section className="student-session-card student-own-points-card">
+                <div className="student-own-points-row">
+                  <span className="student-class-kicker">My points</span>
                   <strong>
                     {studentOwnPoints} pt{studentOwnPoints === 1 ? "" : "s"}
                   </strong>
-                  <p>
-                    {currentStudent?.present
-                      ? "You are marked present in this session."
-                      : sessionOngoing
-                        ? "Join the live session to be marked present."
-                        : "Points update after your teacher records participation."}
-                  </p>
-                </section>
+                </div>
+                <p>
+                  {currentStudent?.present
+                    ? "Points update in real-time as your instructor awards participation."
+                    : sessionOngoing
+                      ? "Join the live session to be marked present."
+                      : "Points update after your instructor records participation."}
+                </p>
 
-                <section className="student-session-card student-activity-card">
-                  <div className="student-activity-session-slot">
-                    <p className="student-class-kicker">Session &amp; invites</p>
+                {pendingSelection && selectedStudent && (
+                  <div className="student-selection-response">
+                    <p className="student-class-kicker">You were selected</p>
+                    <h3>{formatFullNameTitle(selectedStudent.name)}</h3>
                     <p>
-                      Students can join within <strong>15 minutes</strong> after the teacher starts.
+                      Accept to participate for <strong>{pendingSelection.points}</strong>{" "}
+                      pt{pendingSelection.points === 1 ? "" : "s"}, or request to skip when
+                      needed.
                     </p>
+                    <div className="student-selection-actions">
+                      <button
+                        type="button"
+                        className="student-primary-btn"
+                        onClick={() => handleSelectionResponse("accepted")}
+                        disabled={respondingSelection}
+                      >
+                        {respondingSelection ? "Sending..." : "Accept"}
+                      </button>
+                      <button
+                        type="button"
+                        className="student-selection-skip-btn"
+                        onClick={() => handleSelectionResponse("skip_requested")}
+                        disabled={respondingSelection}
+                      >
+                        Request Skip
+                      </button>
+                    </div>
                   </div>
+                )}
 
-                  <div className="student-activity-head">
-                    <h2>Activity Log</h2>
-                    <span>{activityFeed.length}</span>
-                  </div>
+                {selectionMessage && (
+                  <p className="student-selection-message">{selectionMessage}</p>
+                )}
+              </section>
 
-                  <div className="student-activity-list" ref={activityListRef}>
-                    {activityFeed.length === 0 ? (
-                      <p>No activity yet.</p>
-                    ) : (
-                      activityFeed.map((row) => (
-                        <article key={row.id}>
-                          <strong>{row.message}</strong>
-                          <span>{formatLocalActivityTime(row.createdAt)}</span>
-                        </article>
-                      ))
+              <section className="student-session-card student-activity-card">
+                <div className="student-activity-session-slot">
+                  <p className="student-class-kicker">Session &amp; invites</p>
+                  <p>
+                    Students can join within <strong>15 minutes</strong> after the instructor starts.
+                  </p>
+                </div>
+
+                <div className="student-activity-head">
+                  <h2>Activity Log</h2>
+                  <span>{activityFeed.length}</span>
+                </div>
+
+                <div className="student-activity-list" ref={activityListRef}>
+                  {activityFeed.length === 0 ? (
+                    <p>No activity yet.</p>
+                  ) : (
+                    activityFeed.map((row) => (
+                      <article key={row.id}>
+                        <strong>{row.message}</strong>
+                        <span>{formatLocalActivityTime(row.createdAt)}</span>
+                      </article>
+                    ))
+                  )}
+                </div>
+
+                <div className="student-activity-queue">
+                  <div className="student-activity-queue-head">
+                    <h3>Volunteer Queue</h3>
+                    {sessionOngoing && (
+                      <button
+                        type="button"
+                        className="student-primary-btn student-volunteer-inline-btn"
+                        onClick={handleVolunteer}
+                        disabled={!canJoinSession || volunteering || volunteerLimitReached}
+                      >
+                        {alreadyVolunteered
+                          ? "Already in Queue"
+                          : volunteering
+                            ? "Joining..."
+                            : "Volunteer"}
+                      </button>
                     )}
                   </div>
-                </section>
 
-                <section className="student-session-card student-top-scorers-card">
-                  <div className="student-volunteer-head">
-                    <div>
-                      <h2>Top 5 Scorers</h2>
-                    </div>
-                    <span>{topScorers.length}</span>
-                  </div>
+                  {sessionMessage && <p className="student-selection-message">{sessionMessage}</p>}
 
-                  <ol className="student-top-scorers-list">
-                    {topScorers.length === 0 ? (
-                      <li>No scores yet.</li>
+                  <ol className="student-volunteer-list">
+                    {volunteerQueue.length === 0 ? (
+                      <li className="student-volunteer-empty">No volunteers in queue.</li>
                     ) : (
-                      topScorers.map((student, index) => (
-                        <li
-                          className={
-                            student.id === membership?.student_id ? "is-current-student" : ""
-                          }
-                          key={student.id}
-                        >
+                      volunteerQueue.map((item, index) => (
+                        <li key={item.queueId}>
                           <span>{index + 1}</span>
-                          <strong>{formatStudentShort(student.name)}</strong>
-                          <small>
-                            {student.points || 0} pt{student.points === 1 ? "" : "s"}
-                          </small>
+                          <div>
+                            <strong>{formatStudentShort(item.name)}</strong>
+                            <small>{formatFullNameTitle(item.name)}</small>
+                          </div>
                         </li>
                       ))
                     )}
                   </ol>
-                </section>
-              </aside>
-            </section>
-
-            <section className="student-session-card student-list-card">
-              <div className="student-list-head">
-                <div>
-                  <h2>Students in class</h2>
-                  <p>
-                    {sessionOngoing
-                      ? `Present: ${presentCount} / ${students.length} - `
-                      : ""}
-                    Your points update after your teacher records participation.
-                  </p>
                 </div>
-                <button
-                  type="button"
-                  className="student-list-toggle"
-                  onClick={() => setStudentListOpen((open) => !open)}
-                  aria-expanded={studentListOpen}
-                >
-                  {studentListOpen ? "Hide" : "Show"}
-                </button>
-              </div>
+              </section>
 
-              <div className={`student-list ${studentListOpen ? "is-open" : ""}`}>
-                {students.length === 0 ? (
-                  <div className="student-row student-row-empty">
-                    <div>
-                      <strong>No student users yet</strong>
-                      <span className="student-full-name">
-                        Students who join this class will appear here.
-                      </span>
-                    </div>
+              <section className="student-session-card student-top-scorers-card">
+                <div className="student-volunteer-head">
+                  <div>
+                    <h2>Top 5 Scorers</h2>
                   </div>
-                ) : (
-                  students.map((student) => (
-                    <div
-                      className={`student-row ${
-                        student.id === membership?.student_id ? "is-current-student" : ""
-                      }`}
-                      key={student.id}
-                    >
-                      <div>
-                        <strong title={student.name}>{formatStudentShort(student.name)}</strong>
-                        <span className="student-full-name">{student.name}</span>
-                        <span>Points: {student.points ?? 0}</span>
-                      </div>
+                  <span>{topScorers.length}</span>
+                </div>
 
-                      {sessionOngoing && (
-                        <span className={student.present ? "present-badge" : "absent-badge"}>
-                          {student.present ? "Present" : "Absent"}
-                        </span>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+                <ol className="student-top-scorers-list">
+                  {topScorers.length === 0 ? (
+                    <li>No scores yet.</li>
+                  ) : (
+                    topScorers.map((student, index) => (
+                      <li
+                        className={
+                          student.id === membership?.student_id ? "is-current-student" : ""
+                        }
+                        key={student.id}
+                      >
+                        <span>{index + 1}</span>
+                        <strong>{formatStudentShort(student.name)}</strong>
+                        <small>
+                          {student.points || 0} pt{student.points === 1 ? "" : "s"}
+                        </small>
+                      </li>
+                    ))
+                  )}
+                </ol>
+              </section>
             </section>
+
           </>
         )}
       </main>
@@ -1289,3 +1446,4 @@ export default function ClassPageStudent() {
     </div>
   );
 }
+

@@ -7,6 +7,8 @@ import AppLoadingScreen from "../../components/shared/AppLoadingScreen";
 import BottomNav, { teacherBottomNavItems } from "../../components/shared/BottomNav";
 import MobileHeader from "../../components/shared/MobileHeader";
 import TeacherSidebar from "../../components/shared/TeacherSidebar";
+import TeacherNotificationPanel from "../../components/teacher/TeacherNotificationPanel";
+import { useTeacherNotifications } from "../../hooks/useTeacherNotifications";
 import "../../styles/teacher/dashboard.css";
 
 export default function MyClassesTeacher() {
@@ -19,9 +21,19 @@ export default function MyClassesTeacher() {
   const [deleteMode, setDeleteMode] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [teacherName, setTeacherName] = useState("Teacher");
+  const [teacherId, setTeacherId] = useState("");
+  const [teacherName, setTeacherName] = useState("Instructor");
+  const [teacherAvatar, setTeacherAvatar] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const {
+    notifications,
+    unreadNotifications,
+    loadingNotifications,
+    notificationsUnavailable,
+    handleReadNotification,
+    handleMarkAllRead,
+  } = useTeacherNotifications(teacherId);
 
   useEffect(() => {
     loadClasses();
@@ -33,16 +45,23 @@ export default function MyClassesTeacher() {
     if (!account) {
       return;
     }
+    setTeacherId(account.user.id);
     setTeacherName(
       account.teacherProfile?.name ||
         account.user.user_metadata?.name ||
         account.user.user_metadata?.full_name ||
-        "Teacher"
+        "Instructor"
+    );
+    setTeacherAvatar(
+      account.teacherProfile?.avatar_url ||
+        account.user.user_metadata?.avatar_url ||
+        account.user.user_metadata?.picture ||
+        ""
     );
 
     const { data } = await supabase
       .from("classes")
-      .select("*")
+      .select("id, class_name, subject_code, class_code, program, teacher_id, session_active, session_started_at, created_at")
       .eq("teacher_id", account.user.id)
       .order("created_at", { ascending: false });
 
@@ -133,12 +152,24 @@ export default function MyClassesTeacher() {
       <MobileHeader
         notificationOpen={notificationsOpen}
         onToggleNotifications={() => setNotificationsOpen((open) => !open)}
+        notificationCount={unreadNotifications}
         onProfileClick={() => navigate("/settings/account")}
-        profileContent={teacherName.charAt(0).toUpperCase()}
+        profileContent={
+          teacherAvatar ? (
+            <img src={teacherAvatar} alt="Profile" />
+          ) : (
+            teacherName.charAt(0).toUpperCase()
+          )
+        }
         notificationPanel={
-          <div className="notification-panel">
-            <p className="notification-empty">No notifications yet.</p>
-          </div>
+          <TeacherNotificationPanel
+            notifications={notifications}
+            unreadNotifications={unreadNotifications}
+            loadingNotifications={loadingNotifications}
+            notificationsUnavailable={notificationsUnavailable}
+            onMarkAllRead={handleMarkAllRead}
+            onReadNotification={handleReadNotification}
+          />
         }
       />
 
@@ -311,3 +342,5 @@ export default function MyClassesTeacher() {
     </div>
   );
 }
+
+

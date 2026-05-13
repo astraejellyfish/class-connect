@@ -239,9 +239,22 @@
 .notification-list {
   max-height: 348px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--green) transparent;
+}
+
+.notification-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notification-list::-webkit-scrollbar-thumb {
+  background: var(--green);
+  border-radius: 999px;
 }
 
 .notification-item {
+  position: relative;
   width: 100%;
   padding: 12px;
   border: 0;
@@ -257,6 +270,22 @@
 
 .notification-item.is-unread {
   background: #fff7d7;
+  border-left: 5px solid var(--green);
+}
+
+.notification-item.is-unread::after {
+  content: "Unread";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--green);
+  color: white;
+  font-family: "Roboto Mono", monospace;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .notification-item span {

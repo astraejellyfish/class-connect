@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 const NOTIFICATION_COLUMNS =
   "id, teacher_id, title, message, type, is_read, created_at, read_at";
 
-export async function getTeacherNotifications(teacherId, limit = 10) {
+export async function getTeacherNotifications(teacherId, limit = 50) {
   if (!teacherId) return { data: [], error: null };
 
   return supabase

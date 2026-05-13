@@ -46,7 +46,7 @@ export default function LandingPage() {
             <p className="tagline">LEVEL UP YOUR CLASS</p>
 
             <p className="hero-description">
-              An equity-based classroom participation system that helps teachers
+              An equity-based classroom participation system that helps instructors
               manage recitations, track participation points, and encourage every
               student to take part in class.
             </p>
@@ -95,7 +95,7 @@ export default function LandingPage() {
             </div>
             <h3>Point Tracking</h3>
             <p>
-              Allows teachers to assign points for activities and record student
+              Allows instructors to assign points for activities and record student
               participation.
             </p>
           </div>
@@ -134,7 +134,7 @@ export default function LandingPage() {
 
               <p>
                 Class Connect is a classroom participation system designed to
-                help teachers manage recitations in a fair, organized, and
+                help instructors manage recitations in a fair, organized, and
                 technology-assisted way.
               </p>
 
@@ -175,7 +175,7 @@ export default function LandingPage() {
               <p>
                 Class Connect supports fair classroom participation through class
                 sessions, student selection, volunteer queues, participation
-                records, point tracking, and teacher-managed activities.
+                records, point tracking, and instructor-managed activities.
               </p>
 
               <h3>2. Account Registration</h3>
@@ -195,8 +195,8 @@ export default function LandingPage() {
               <h3>4. Participation and Points</h3>
               <p>
                 Participation records, volunteer queues, and points are managed
-                by the teacher. The system records and organizes participation
-                data based on class activities and teacher input.
+                by the instructor. The system records and organizes participation
+                data based on class activities and instructor input.
               </p>
 
               <h3>5. Data Collection</h3>
@@ -234,7 +234,7 @@ export default function LandingPage() {
               <p>
                 Class Connect assists classroom participation management, but it
                 may still depend on internet connection, device compatibility,
-                teacher input, and correct student information.
+                instructor input, and correct student information.
               </p>
 
               <h3>9. Agreement</h3>
@@ -253,3 +253,4 @@ export default function LandingPage() {
     </main>
   );
 }
+

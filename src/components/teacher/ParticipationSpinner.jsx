@@ -1,7 +1,4 @@
-import {
-  formatFullNameTitle,
-  formatStudentShort,
-} from "../../utils/studentDisplay";
+import { formatStudentShort } from "../../utils/studentDisplay";
 
 const PALETTE = [
   "#2f7a45",
@@ -16,25 +13,17 @@ const PALETTE = [
 
 function ParticipationSpinner({
   students,
-  selectedStudent,
   spinning,
-  pendingPick = null,
-  pickOutcome = null,
   spinRotation = 0,
 }) {
   const maxSegments = 40;
   const visibleStudents = students.slice(0, maxSegments);
   const n = visibleStudents.length || 1;
-
-  const wheelPx = Math.min(440, Math.max(200, 130 + n * 7.5));
+  const wheelPx = Math.min(620, Math.max(320, 220 + n * 9));
   const radius = wheelPx / 2;
-  const labelRadius = Math.max(radius - 26, 52);
+  const labelRadius = Math.max(radius - 56, 47);
 
   const segment = 360 / n;
-  const selectedName = selectedStudent
-    ? formatFullNameTitle(selectedStudent.name)
-    : "No student selected";
-
   const getFontSizePx = (label) => {
     const len = label.length;
     if (n >= 32) return len > 14 ? 6 : len > 10 ? 7 : 8;
@@ -92,44 +81,6 @@ function ParticipationSpinner({
         })}
 
         <div className="wheel-center" />
-      </div>
-
-      <div
-        className={`selection-status ${
-          pendingPick
-            ? "selection-status--pending"
-            : pickOutcome
-              ? `selection-status--${pickOutcome.kind.toLowerCase()}`
-              : ""
-        }`}
-      >
-        <span className="selection-status-kicker">
-          {spinning
-            ? "Selecting"
-            : pendingPick
-              ? "Waiting for confirmation"
-              : pickOutcome
-                ? pickOutcome.kind === "Yes"
-                  ? "Points awarded"
-                  : "No points awarded"
-                : "Selection status"}
-        </span>
-        <strong>
-          {spinning
-            ? "Spinning..."
-            : selectedStudent
-              ? selectedName
-              : "No student selected"}
-        </strong>
-        <span className="selection-status-meta">
-          {pendingPick
-            ? `${pendingPick.pts} pt${pendingPick.pts === 1 ? "" : "s"} pending`
-            : pickOutcome
-              ? pickOutcome.kind === "Yes"
-                ? `+${pickOutcome.pts} pt${pickOutcome.pts === 1 ? "" : "s"}`
-                : `0 pts, offered ${pickOutcome.offered}`
-              : "Spin to choose a present student"}
-        </span>
       </div>
 
       {students.length > maxSegments && (

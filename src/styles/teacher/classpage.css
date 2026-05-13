@@ -52,12 +52,12 @@
 
 .class-title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
 }
 
 .class-title-row .class-back-btn {
-  margin-top: 0;
+  margin-top: 2px;
 }
 
 .class-title-row span {
@@ -224,14 +224,15 @@
 }
 
 .class-side-stack .activity-panel {
-  flex: 0 1 360px;
-  min-height: 220px;
-  max-height: clamp(260px, 42svh, 380px);
+  flex: 1;
+  min-height: 420px;
+  max-height: 620px;
+
   display: flex;
   flex-direction: column;
+
   overflow: hidden;
 }
-
 .participation-head {
   margin-bottom: 8px;
 }
@@ -637,14 +638,13 @@
 }
 
 .student-row {
+  position: relative;
   background: white;
   border: 2px solid var(--dark);
   border-radius: 14px;
-  padding: 14px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: flex-start;
-  gap: 10px;
+  padding: 14px 78px 14px 14px;
+  display: block;
+  min-height: 84px;
 }
 
 .student-row.is-selected {
@@ -669,21 +669,18 @@
   accent-color: var(--green);
 }
 
-.student-row > div:first-child {
-  min-width: 0;
+.student-row.is-selected {
+  background: #fff7d7;
 }
 
-.student-row-empty {
-  grid-column: 1 / -1;
-  justify-content: center;
-  text-align: center;
+.student-row > div:first-child {
+  min-width: 0;
 }
 
 .student-row strong,
 .student-row span {
   display: block;
 }
-
 .student-row strong {
   overflow: hidden;
   color: var(--dark);
@@ -705,15 +702,21 @@
   font-size: 11px !important;
   color: var(--muted);
   opacity: 0.85;
+  white-space: normal;
+  word-break: break-word;
+  padding-right: 6px;
 }
 
 .present-badge,
 .absent-badge {
-  height: fit-content;
-  padding: 5px 8px;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 5px 10px;
   border-radius: 999px;
-  font-size: 11px !important;
+  font-size: 10px !important;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .present-badge {
@@ -927,10 +930,19 @@ button:disabled {
 }
 
 .top-scorers-card {
-  flex: 0 0 120px;
-  height: 120px;
+  flex: 0 0 auto;
+  min-height: 200px;
+  height: 276px;
+
   display: flex;
   flex-direction: column;
+
+  padding: 16px;
+  border: 2px solid var(--dark);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 5px 5px 0 var(--shadow);
+  overflow: hidden;
 }
 
 .top-scorers-head {
@@ -1133,7 +1145,8 @@ button:disabled {
   background: white;
   border: 2px solid var(--dark);
   border-radius: 14px;
-  padding: 12px;
+  padding: 10px 12px;
+  min-height: 88px;
 }
 
 .activity-item strong {
@@ -1143,6 +1156,8 @@ button:disabled {
 .activity-item p {
   margin: 4px 0 0;
   color: var(--muted);
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .ai-summary-card {
@@ -1663,6 +1678,8 @@ button:disabled {
 
 @media (max-width: 900px) {
   .class-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: flex-start;
     gap: 12px;
   }
@@ -1688,15 +1705,56 @@ button:disabled {
   }
 
   .class-invite-actions {
-    width: 100%;
+    width: auto;
     display: flex;
     justify-content: flex-end;
     gap: 10px;
   }
 
-  .class-actions-menu {
+  .class-actions-toggle {
     display: inline-flex;
-    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 2px solid var(--dark);
+    border-radius: 10px;
+    background: var(--green);
+    color: white;
+    box-shadow: 2px 2px 0 var(--shadow);
+    font-family: "Roboto Mono", monospace;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .class-actions-toggle::before {
+    content: "";
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 8px 0 0 currentColor, -8px 0 0 currentColor;
+  }
+
+  .class-actions-menu {
+    position: absolute;
+    top: calc(100% + 7px);
+    right: 0;
+    z-index: 20;
+    display: none;
+    width: min(190px, calc(100vw - 24px));
+    padding: 7px;
+    border: 2px solid var(--dark);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: 4px 4px 0 var(--shadow);
+  }
+
+  .class-actions-menu.open {
+    display: grid;
+    gap: 6px;
   }
 
   .dash-top .class-top-invite-btn {
@@ -1707,8 +1765,10 @@ button:disabled {
   }
 
   .class-invite-actions span {
-    right: 0;
-    max-width: 100%;
+    top: calc(100% + 7px);
+    bottom: auto;
+    right: 48px;
+    max-width: min(180px, calc(100vw - 74px));
     white-space: normal;
     text-align: right;
   }
@@ -1993,7 +2053,7 @@ button:disabled {
 @media (max-width: 480px) {
   .class-top {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(104px, 34%);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     gap: 8px;
   }
@@ -2039,7 +2099,7 @@ button:disabled {
   }
 
   .class-invite-actions {
-    width: 100%;
+    width: auto;
     display: flex;
     justify-content: flex-end;
     gap: 6px;
@@ -2089,7 +2149,7 @@ button:disabled {
     right: 0;
     z-index: 20;
     display: none;
-    width: min(170px, calc(100vw - 20px));
+    width: min(176px, calc(100vw - 20px));
     padding: 7px;
     border: 2px solid var(--dark);
     border-radius: 12px;
@@ -2113,10 +2173,11 @@ button:disabled {
   }
 
   .class-invite-actions span {
+    position: absolute;
     top: calc(100% + 6px);
     bottom: auto;
-    right: 0;
-    max-width: min(180px, 100vw - 20px);
+    right: 44px;
+    max-width: min(170px, 100vw - 68px);
     padding: 5px 8px;
     font-size: 10px;
     text-align: right;

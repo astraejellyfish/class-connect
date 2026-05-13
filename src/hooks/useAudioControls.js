@@ -18,7 +18,9 @@ export function useAudioControls({ sessionActive = false, countdownSeconds = 10 
   useEffect(() => {
     bgmRef.current = new Audio("/bgm.wav");
     bgmRef.current.loop = true;
+    bgmRef.current.preload = "auto";
     bgmRef.current.volume = 0.22;
+    bgmRef.current.load();
     bgmRef.current.addEventListener("ended", () => {
       if (bgmRef.current) {
         bgmRef.current.currentTime = 0;
@@ -74,9 +76,25 @@ export function useAudioControls({ sessionActive = false, countdownSeconds = 10 
     const unlockAudio = () => {
       unlockedRef.current = true;
       const bgm = bgmRef.current;
-      if (sessionActive && audioSettings.sessionMusic && bgm) {
+      if (!bgm || !audioSettings.sessionMusic) return;
+
+      if (sessionActive) {
+        bgm.muted = false;
         bgm.play().catch(() => {});
+        return;
       }
+
+      bgm.muted = true;
+      bgm
+        .play()
+        .then(() => {
+          bgm.pause();
+          bgm.currentTime = 0;
+          bgm.muted = false;
+        })
+        .catch(() => {
+          bgm.muted = false;
+        });
     };
 
     window.addEventListener("pointerdown", unlockAudio, { passive: true });
@@ -151,12 +169,17 @@ export function useAudioControls({ sessionActive = false, countdownSeconds = 10 
 
   const restartSessionMusic = useCallback(() => {
     if (!audioSettings.sessionMusic || !bgmRef.current) return;
+    localStorage.setItem(SESSION_MUSIC_WANTED_KEY, "true");
+    bgmRef.current.muted = false;
     bgmRef.current.currentTime = 0;
     bgmRef.current.play().catch(() => {});
   }, [audioSettings.sessionMusic]);
 
   const pauseSessionMusic = useCallback(() => {
-    bgmRef.current?.pause();
+    localStorage.setItem(SESSION_MUSIC_WANTED_KEY, "false");
+    if (!bgmRef.current) return;
+    bgmRef.current.pause();
+    bgmRef.current.muted = false;
   }, []);
 
   return {

@@ -12,6 +12,8 @@ import JoinClassModal from "../../components/student/JoinClassModal";
 import AppLoadingScreen from "../../components/shared/AppLoadingScreen";
 import BottomNav, { studentBottomNavItems } from "../../components/shared/BottomNav";
 import MobileHeader from "../../components/shared/MobileHeader";
+import StudentNotificationPanel from "../../components/student/StudentNotificationPanel";
+import { useStudentNotifications } from "../../hooks/useStudentNotifications";
 import "../../styles/student/myclasses.css";
 
 function mapMembership(row) {
@@ -39,10 +41,16 @@ export default function MyClasses() {
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notificationsRead, setNotificationsRead] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [now, setNow] = useState(new Date());
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const {
+    notifications,
+    unreadNotifications,
+    loadingNotifications,
+    notificationsReadAt,
+    handleMarkAllRead,
+  } = useStudentNotifications(studentId);
 
   useEffect(() => {
     loadStudentPage();
@@ -63,6 +71,41 @@ export default function MyClasses() {
     const timer = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!studentId) return undefined;
+
+    const channel = supabase
+      .channel(`student-myclasses-notifications-${studentId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "class_members",
+          filter: `student_id=eq.${studentId}`,
+        },
+        () => {
+          loadStudentPage();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "classes",
+        },
+        () => {
+          loadStudentPage();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [studentId]);
 
   async function loadStudentPage() {
     setLoading(true);
@@ -87,7 +130,12 @@ export default function MyClasses() {
         "Student"
     );
     setStudentEmail(studentProfile?.email || user.email || "");
-    setStudentAvatar(studentProfile?.avatar_url || "");
+    setStudentAvatar(
+      studentProfile?.avatar_url ||
+        user.user_metadata?.avatar_url ||
+        user.user_metadata?.picture ||
+        ""
+    );
 
     if (classError) {
       console.error("LOAD STUDENT CLASSES ERROR:", classError);
@@ -114,25 +162,6 @@ export default function MyClasses() {
     });
   }, [memberships, search]);
 
-  const notifications = useMemo(() => {
-    // Show only useful alerts that need the student's attention.
-    const lockedCount = memberships.filter((item) => !canEnterClass(item)).length;
-    const list = [];
-
-    if (lockedCount > 0) {
-      list.unshift({
-        id: "locked",
-        title: `${lockedCount} class${lockedCount === 1 ? "" : "es"} need confirmation`,
-        message: "Ask your teacher to confirm entry after the 15-minute window.",
-        type: "entry",
-        createdAt: new Date(),
-      });
-    }
-
-    return list;
-  }, [memberships]);
-  const unreadNotifications = notificationsRead ? 0 : notifications.length;
-
   const handleJoinClass = async (event) => {
     event.preventDefault();
     setJoinError("");
@@ -143,7 +172,7 @@ export default function MyClasses() {
       return;
     }
 
-    // Join the class using the teacher's class code.
+    // Join the class using the instructor's class code.
     setJoining(true);
     const { data, error } = await joinClassByCode(studentId, joinCode);
     setJoining(false);
@@ -165,9 +194,9 @@ export default function MyClasses() {
   };
 
   const handleEnterClass = (membership) => {
-    // Block entry after 15 minutes unless the teacher confirmed it.
+    // Block entry after 15 minutes unless the instructor confirmed it.
     if (!canEnterClass(membership)) {
-      setJoinError("Entry window expired. Please ask your teacher for confirmation.");
+      setJoinError("Entry window expired. Please ask your instructor for confirmation.");
       return;
     }
 
@@ -198,47 +227,13 @@ export default function MyClasses() {
           )
         }
         notificationPanel={
-          <div className="student-notification-panel">
-            <div className="student-notification-panel-head">
-              <h3>Notifications</h3>
-              <button
-                type="button"
-                onClick={() => setNotificationsRead(true)}
-                disabled={notificationsRead || notifications.length === 0}
-              >
-                Mark all read
-              </button>
-            </div>
-
-            {notifications.length === 0 ? (
-              <p className="student-notification-empty">No notifications yet.</p>
-            ) : (
-              <div className="student-notification-list">
-                {notifications.map((notification) => (
-                  <article
-                    key={notification.id}
-                    className={`student-notification-item ${
-                      notificationsRead ? "" : "is-unread"
-                    }`}
-                  >
-                    <span>
-                      <strong>{notification.title}</strong>
-                      <small>{notification.type}</small>
-                    </span>
-                    <p>{notification.message}</p>
-                    <time>
-                      {notification.createdAt.toLocaleString([], {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </time>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
+          <StudentNotificationPanel
+            notifications={notifications}
+            unreadNotifications={unreadNotifications}
+            loadingNotifications={loadingNotifications}
+            notificationsReadAt={notificationsReadAt}
+            onMarkAllRead={handleMarkAllRead}
+          />
         }
       />
 
@@ -292,55 +287,21 @@ export default function MyClasses() {
               <button
                 type="button"
                 className="student-icon-btn"
-                onClick={() => setNotificationsOpen((open) => !open)}
-                aria-label="Open notifications"
-              >
-                <img src="/icons/notification.png" alt="" />
-                {unreadNotifications > 0 && <span>{unreadNotifications}</span>}
-              </button>
+                  onClick={() => setNotificationsOpen((open) => !open)}
+                  aria-label="Open notifications"
+                >
+                  <img src="/icons/notification.png" alt="" />
+                  {unreadNotifications > 0 && <span>{unreadNotifications}</span>}
+                </button>
 
               {notificationsOpen && (
-                <div className="student-notification-panel">
-                  <div className="student-notification-panel-head">
-                    <h3>Notifications</h3>
-                    <button
-                      type="button"
-                      onClick={() => setNotificationsRead(true)}
-                      disabled={notificationsRead || notifications.length === 0}
-                    >
-                      Mark all read
-                    </button>
-                  </div>
-
-                  {notifications.length === 0 ? (
-                    <p className="student-notification-empty">No notifications yet.</p>
-                  ) : (
-                    <div className="student-notification-list">
-                      {notifications.map((notification) => (
-                        <article
-                          key={notification.id}
-                          className={`student-notification-item ${
-                            notificationsRead ? "" : "is-unread"
-                          }`}
-                        >
-                          <span>
-                            <strong>{notification.title}</strong>
-                            <small>{notification.type}</small>
-                          </span>
-                          <p>{notification.message}</p>
-                          <time>
-                            {notification.createdAt.toLocaleString([], {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </time>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <StudentNotificationPanel
+                  notifications={notifications}
+                  unreadNotifications={unreadNotifications}
+                  loadingNotifications={loadingNotifications}
+                  notificationsReadAt={notificationsReadAt}
+                  onMarkAllRead={handleMarkAllRead}
+                />
               )}
             </div>
 
@@ -411,7 +372,7 @@ export default function MyClasses() {
             {filteredMemberships.length === 0 ? (
               <div className="student-empty">
                 <strong>No classes found</strong>
-                <p>Join a class using the class code from your teacher.</p>
+                <p>Join a class using the class code from your instructor.</p>
               </div>
             ) : (
               filteredMemberships.map((membership) => {
@@ -440,14 +401,14 @@ export default function MyClasses() {
                         </span>
                       </div>
                       <div className="student-class-teacher">
-                        <strong>Teacher</strong>
+                        <strong>Instructor</strong>
                         <div>
-                          <span>{classData.teacher?.name || "Teacher name unavailable"}</span>
-                          <small>{classData.teacher?.email || "Teacher email unavailable"}</small>
+                          <span>{classData.teacher?.name || "Instructor name unavailable"}</span>
+                          <small>{classData.teacher?.email || "Instructor email unavailable"}</small>
                         </div>
                       </div>
                       {sessionOngoing && !entryAllowed && (
-                        <small>Needs teacher confirmation after 15 minutes.</small>
+                        <small>Needs instructor confirmation after 15 minutes.</small>
                       )}
                       <button
                         type="button"
@@ -488,3 +449,4 @@ export default function MyClasses() {
     </div>
   );
 }
+

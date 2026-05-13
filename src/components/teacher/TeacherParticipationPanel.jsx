@@ -7,9 +7,7 @@ function TeacherParticipationPanel({
   sessionActive = false,
   spinning = false,
   pendingPick = null,
-  pickOutcome = null,
   spinRotation = 0,
-  selectedStudent = null,
   resolvingPick = false,
   selectionRequestUnavailable = false,
   eligiblePresentCount = 0,
@@ -30,7 +28,7 @@ function TeacherParticipationPanel({
     <div className="participation-stack">
       <section className="participation-card participation-card-main">
         <div className="participation-head participation-head-row">
-          <h3>Participation</h3>
+          <h3>Participation Wheel</h3>
           <div className="participation-toolbar">
             <div
               className={`session-status-pill ${sessionActive ? "active" : ""}`}
@@ -70,7 +68,7 @@ function TeacherParticipationPanel({
 
         <p className="participation-sub">
           Weighted fairness: fewer total points means a higher chance to be picked.
-          Set <strong>Pts / pick</strong>, then spin. The teacher manually awards
+          Set <strong>Pts / pick</strong>, then spin. The instructor manually awards
           points or skips when the answer is finished.
         </p>
 
@@ -84,10 +82,7 @@ function TeacherParticipationPanel({
           ) : (
             <ParticipationSpinner
               students={students}
-              selectedStudent={selectedStudent}
               spinning={spinning}
-              pendingPick={pendingPick}
-              pickOutcome={pickOutcome}
               spinRotation={spinRotation}
             />
           )}
@@ -110,7 +105,7 @@ function TeacherParticipationPanel({
                   : pendingPick.responseStatus === "skip_requested"
                     ? "Requested skip"
                     : selectionRequestUnavailable
-                      ? "Teacher fallback"
+                      ? "Pending"
                       : "Pending"}
               </strong>
             </p>

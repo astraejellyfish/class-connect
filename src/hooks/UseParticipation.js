@@ -63,10 +63,10 @@ export function useTeacherParticipationActions({
           )
         );
         playAcceptSound();
-        addLog(`Teacher awarded ${pts} point${pts === 1 ? "" : "s"} to ${fullName}.`);
+        addLog(`Instructor awarded ${pts} point${pts === 1 ? "" : "s"} to ${fullName}.`);
         setPickOutcome({ kind: "Yes", pts });
       } else {
-        addLog(`${fullName} requested to skip.`);
+        addLog(`${fullName} was skipped.`);
         setPickOutcome({ kind: "No", offered: pts });
         playSkipSound();
       }
@@ -145,16 +145,33 @@ export function useTeacherParticipationActions({
       });
     });
 
-    setTimeout(async () => {
-      setSelectedStudent(chosen);
-      setSpinning(false);
-      const { data, error } = await createSelectionRequest({
-        classId,
-        studentId: chosen.id,
-        points: pts,
-      });
+    createSelectionRequest({
+      classId,
+      studentId: chosen.id,
+      points: pts,
+    })
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn("Selection request table is unavailable:", error);
+          setSelectionRequestUnavailable(true);
+          setPendingPick({
+            student: chosen,
+            pts,
+            responseStatus: "teacher_confirmation",
+          });
+          return;
+        }
 
-      if (error) {
+        setSelectionRequestUnavailable(false);
+        setPendingPick({
+          student: chosen,
+          pts,
+          requestId: data.id,
+          responseStatus: data.status,
+          expiresAt: data.expires_at,
+        });
+      })
+      .catch((error) => {
         console.warn("Selection request table is unavailable:", error);
         setSelectionRequestUnavailable(true);
         setPendingPick({
@@ -162,19 +179,11 @@ export function useTeacherParticipationActions({
           pts,
           responseStatus: "teacher_confirmation",
         });
-        addLog(`${formatFullNameTitle(chosen.name)} was selected.`);
-        playResultSound();
-        return;
-      }
-
-      setSelectionRequestUnavailable(false);
-      setPendingPick({
-        student: chosen,
-        pts,
-        requestId: data.id,
-        responseStatus: data.status,
-        expiresAt: data.expires_at,
       });
+
+    setTimeout(() => {
+      setSelectedStudent(chosen);
+      setSpinning(false);
       addLog(`${formatFullNameTitle(chosen.name)} was selected.`);
       playResultSound();
     }, 1200);
@@ -238,7 +247,7 @@ export function useTeacherParticipationActions({
         volunteer.queueId ? item.queueId !== volunteer.queueId : item.id !== volunteer.id
       )
     );
-    addLog(`Teacher awarded ${pts} point${pts === 1 ? "" : "s"} to ${fullName}.`);
+    addLog(`Instructor awarded ${pts} point${pts === 1 ? "" : "s"} to ${fullName}.`);
     playAcceptSound();
   }, [
     addLog,

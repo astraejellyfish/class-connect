@@ -19,6 +19,7 @@ export function useTeacherClassSession({
 }) {
   const handleStartSession = useCallback(async () => {
     const startedAt = new Date().toISOString();
+    restartSessionMusic();
     const { error } = await supabase
       .from("classes")
       .update({ session_active: true, session_started_at: startedAt })
@@ -26,6 +27,7 @@ export function useTeacherClassSession({
 
     if (error) {
       console.error(error);
+      pauseSessionMusic();
       addLog("Could not start session. Please try again.");
       return;
     }
@@ -57,10 +59,10 @@ export function useTeacherClassSession({
     addLog("Session started. Students can enter within 15 minutes.", {
       sessionStartedAt: startedAt,
     });
-    restartSessionMusic();
   }, [
     addLog,
     classId,
+    pauseSessionMusic,
     restartSessionMusic,
     setClassData,
     setSessionActive,
@@ -80,6 +82,16 @@ export function useTeacherClassSession({
       return;
     }
 
+    // Clear activity logs from database when session ends
+    const { error: logDeleteError } = await supabase
+      .from("class_session_logs")
+      .delete()
+      .eq("class_id", classId);
+
+    if (logDeleteError) {
+      console.warn("Could not clear activity logs:", logDeleteError);
+    }
+
     setSessionActive(false);
     setClassData((prev) =>
       prev
@@ -95,14 +107,11 @@ export function useTeacherClassSession({
     setSessionSelectedStudentIds(new Set());
     setVolunteerQueue([]);
     addLog("Session ended.");
-    window.setTimeout(() => {
-      setLogs([]);
-    }, endedLogRetentionMs);
+    setLogs([]);
     pauseSessionMusic();
   }, [
     addLog,
     classId,
-    endedLogRetentionMs,
     pauseSessionMusic,
     setClassData,
     setLogs,

@@ -39,7 +39,7 @@ serve(async (req) => {
     }
 
     const prompt = `
-You are Class Connect Ask AI, a helpful classroom assistant for teachers and students.
+You are Class Connect Ask AI, a helpful classroom assistant for instructors and students.
 
 Answer the user's question clearly and simply.
 

@@ -253,7 +253,7 @@ export default function SignUpPage() {
                     Select a role
                   </option>
                   <option value="student">Student</option>
-                  <option value="teacher">Teacher</option>
+                  <option value="teacher">Instructor</option>
                 </select>
               </div>
               
@@ -453,7 +453,7 @@ export default function SignUpPage() {
               <p>
                 Class Connect supports fair classroom participation through class
                 sessions, student selection, volunteer queues, participation records,
-                point tracking, and teacher-managed activities.
+                point tracking, and instructor-managed activities.
               </p>
       
               <h3>2. Account Registration</h3>
@@ -473,8 +473,8 @@ export default function SignUpPage() {
               <h3>4. Participation and Points</h3>
               <p>
                 Participation records, volunteer queues, and points are managed by the
-                teacher. The system records and organizes participation data based on
-                class activities and teacher input.
+                instructor. The system records and organizes participation data based on
+                class activities and instructor input.
               </p>
       
               <h3>5. Data Collection</h3>
@@ -507,7 +507,7 @@ export default function SignUpPage() {
               <h3>8. System Limitations</h3>
               <p>
                 Class Connect assists classroom participation management, but it may
-                still depend on internet connection, device compatibility, teacher input,
+                still depend on internet connection, device compatibility, instructor input,
                 and correct student information.
               </p>
       
@@ -538,3 +538,5 @@ export default function SignUpPage() {
     </main>
   );
 }
+
+

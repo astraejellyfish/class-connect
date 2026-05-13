@@ -257,9 +257,22 @@
 .student-notification-list {
   max-height: 348px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--green) transparent;
+}
+
+.student-notification-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.student-notification-list::-webkit-scrollbar-thumb {
+  background: var(--green);
+  border-radius: 999px;
 }
 
 .student-notification-item {
+  position: relative;
   width: 100%;
   padding: 12px;
   border-bottom: 1px solid rgba(31, 42, 31, 0.12);
@@ -271,6 +284,22 @@
 
 .student-notification-item.is-unread {
   background: #fff7d7;
+  border-left: 5px solid var(--green);
+}
+
+.student-notification-item.is-unread::after {
+  content: "Unread";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--green);
+  color: white;
+  font-family: "Roboto Mono", monospace;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .student-notification-item span {
